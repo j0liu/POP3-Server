@@ -11,24 +11,34 @@
 #include <limits.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #include <unistd.h>
-
+#include "buffer.h"
+#include "netutils.h"
+#include "tests.h"
+#include "pop3_cmd.h"
 // #include "socks5.h"
 
 /**
  * estructura utilizada para transportar datos entre el hilo
  * que acepta sockets y los hilos que procesa cada conexión
  */
-
 struct connection {
   int fd; 
   socklen_t addrlen;
   struct sockaddr_in6 addr;
 };
+
+static bool done = false;
+
+static void sigterm_handler(const int signal) {
+    printf("signal %d, cleaning up and exiting\n",signal);
+    done = true;
+}
 
 
 /**
@@ -39,9 +49,48 @@ struct connection {
  */
 
 static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
-    write(fd, "+OK POP3 server ready\r\n", 23);
-    char buffer[1024];
-    read(fd, buffer, 1024);
+    struct buffer serverBuf;
+    buffer *b = &serverBuf;
+    uint8_t serverDirectBuff[1024];
+    buffer_init(&serverBuf, N(serverDirectBuff), serverDirectBuff);
+
+    struct buffer clientBuf;
+    buffer *b = &clientBuf;
+    uint8_t clientDirectBuffer[1024];
+    buffer_init(&clientBuf, N(clientDirectBuffer), clientDirectBuffer);
+    
+    memcpy(serverDirectBuff, "+OK POP3 server ready\r\n", 23);
+    buffer_write_adv(b, 23);
+    sock_blocking_write(fd, 0);    
+
+   {
+    bool error = false;
+    size_t buffsize;
+    ssize_t n;
+    struct pop3_cmd_parser pop3cmd_parser = {
+    };
+    pop3cmd_parser_init(&pop3cmd_parser);
+
+
+    do {
+        uint8_t *ptr = buffer_write_ptr(&clientBuf, &buffsize);
+        n = recv(fd, ptr, buffsize, 0); 
+        if(n > 0) {
+            buffer_write_adv(&clientBuf, n); 
+            const enum pop3_cmd_state st = pop3_cmd_consume(&clientBuf, &pop3cmd_parser, &error);
+            if (pop3_cmd_is_done(st, &error)) {
+                break;
+            }
+        } else {
+            break;
+        }   
+    } while(true);
+    // if(!hello_is_done(hello_parser.state, &error)) {
+    //     error = true;
+    // }
+    // hello_parser_close(&hello_parser);
+    // return error;
+   } 
     close(fd);
 }
 
@@ -59,7 +108,7 @@ static void * handle_connection_pthread(void *args) {
 
 int serve_pop3_concurrent_blocking(const int server)
 {
-    for (;;)
+    for (;!done;)
     {
         struct sockaddr_in6 caddr;
         socklen_t caddrlen = sizeof(caddr);
@@ -160,8 +209,15 @@ int main(const int argc, const char **argv)
         goto finally;
     }
 
+    // registrar sigterm es útil para terminar el programa normalmente.
+    // esto ayuda mucho en herramientas como valgrind.
+    signal(SIGTERM, sigterm_handler);
+    signal(SIGINT,  sigterm_handler);
+
     err_msg = 0;
     int ret = serve_pop3_concurrent_blocking(server);
+
+
     getchar();
 
 finally:
