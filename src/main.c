@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <signal.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -50,17 +51,17 @@ static void sigterm_handler(const int signal) {
 
 static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     struct buffer serverBuf;
-    buffer *b = &serverBuf;
+    buffer *bS = &serverBuf;
     uint8_t serverDirectBuff[1024];
     buffer_init(&serverBuf, N(serverDirectBuff), serverDirectBuff);
 
     struct buffer clientBuf;
-    buffer *b = &clientBuf;
+    // buffer *bC = &clientBuf;
     uint8_t clientDirectBuffer[1024];
     buffer_init(&clientBuf, N(clientDirectBuffer), clientDirectBuffer);
     
     memcpy(serverDirectBuff, "+OK POP3 server ready\r\n", 23);
-    buffer_write_adv(b, 23);
+    buffer_write_adv(bS, 23);
     sock_blocking_write(fd, 0);    
 
    {
@@ -68,8 +69,9 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     size_t buffsize;
     ssize_t n;
     struct pop3_cmd_parser pop3cmd_parser = {
+        
     };
-    pop3cmd_parser_init(&pop3cmd_parser);
+    pop3_cmd_parser_init(&pop3cmd_parser);
 
 
     do {
