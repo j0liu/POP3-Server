@@ -8,5 +8,8 @@ COMPILER = ${CC}
 
 all: pop3d
 
+clean:
+	rm -f $(OBJS) $(TARGET)
+
 pop3d:
 	$(COMPILER) $(CFLAGS) -o $(TARGET) $(SOURCES) $(LIBS)

@@ -60,7 +60,6 @@ command_description available_commands[] = {
 };
 
 
-
 int consume_pop3_buffer(parser * pop3parser, buffer * client_buffer, ssize_t n) {
     for (int i=0; i<n; i++) {
         const uint8_t c = buffer_read(client_buffer);
@@ -106,7 +105,7 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     
     memcpy(serverDirectBuff, "+OK POP3 server ready\r\n", 23);
     buffer_write_adv(&serverBuf, 23);
-    sock_blocking_write(fd, &serverBuf);    
+    sock_blocking_write(fd, &serverBuf);
 
    {
     // bool error = false;
@@ -122,7 +121,7 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
         uint8_t *clientBufWritePtr = buffer_write_ptr(&clientBuf, &buffsize);
         n = recv(fd, clientBufWritePtr, buffsize, 0);
         if(n > 0) {
-            buffer_write_adv(&clientBuf, n); 
+            buffer_write_adv(&clientBuf, n);
             if (consume_pop3_buffer(pop3parser, &clientBuf, n) == 0) {
                 parser_event * event = parser_get_event(pop3parser);
                 if (event != NULL)

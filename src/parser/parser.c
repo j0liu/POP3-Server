@@ -59,7 +59,9 @@ const struct parser_event * parser_feed(struct parser *p, const uint8_t c) {
         }
 
         if(matched) {
-            state[i].act(p->eventToReturn, c);
+            if (state[i].act != NULL) {
+                state[i].act(p->eventToReturn, c);
+            }
             // if(state[i].act2 != NULL) {
             //     p->e1.next = &p->e2;
             //     state[i].act2(&p->e2, c);
