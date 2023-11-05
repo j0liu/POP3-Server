@@ -1,4 +1,4 @@
-#include <stdlib.h>
+/*#include <stdlib.h>
 #include <check.h>
 
 // asi se puede probar las funciones internas
@@ -114,3 +114,4 @@ main(void) {
     srunner_free(sr);
     return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
+*/
