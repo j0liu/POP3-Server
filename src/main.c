@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <limits.h>
 #include <errno.h>
 #include <pthread.h>
@@ -23,7 +24,7 @@
 // #include "tests.h"
 #include "pop3_utils.h"
 #include "parser/parser.h"
-
+#include "socket_data.h"
 
 // TODO: Mover de aca a un utils
 #define N(x) (sizeof(x)/sizeof((x)[0]))
@@ -45,20 +46,13 @@ static void sigterm_handler(const int signal) {
     done = true;
 }
 
-void noop_handler(buffer * server_buffer, const int fd) {
+void noop_handler(SocketData * socket_data) {
     printf("NOOP detected :D\n");
-    size_t buffsize;
-    uint8_t * buffer_ptr = buffer_write_ptr(server_buffer, &buffsize);
-    memcpy(buffer_ptr, "+OK\r\n", 6);
-    buffer_write_adv(server_buffer, 6);
-    sock_blocking_write(fd, server_buffer);
+    socket_write(socket_data, "+OK\r\n", 6);
 }
 
-void capa_handler(buffer * server_buffer, const int fd) {
+void capa_handler(SocketData * socket_data) {
     printf("CAPA detected :O\n");
-    // memcpy(serverDirectBuff, "+OK POP3 server ready\r\n", 23);
-    // buffer_write_adv(&serverBuf, 23);
-    // sock_blocking_write(fd, &serverBuf);
 }
 
 command_description available_commands[] = {
@@ -67,9 +61,9 @@ command_description available_commands[] = {
 };
 
 
-int consume_pop3_buffer(parser * pop3parser, buffer * client_buffer, ssize_t n) {
+int consume_pop3_buffer(parser * pop3parser, SocketData * socket_data, ssize_t n) {
     for (int i=0; i<n; i++) {
-        const uint8_t c = buffer_read(client_buffer);
+        const uint8_t c = socket_data_read(socket_data);
         const parser_event * event = parser_feed(pop3parser, c);
         if (event == NULL)
             return -1;
@@ -81,11 +75,10 @@ int consume_pop3_buffer(parser * pop3parser, buffer * client_buffer, ssize_t n) 
     return 0;
 }
 
-int process_event(parser_event * event, buffer * server_buffer, const int fd) {
+int process_event(parser_event * event, SocketData * socket_data) {
     for (int i = 0; i < (int) N(available_commands); i++) {
         if (strcmp(event->command, available_commands[i].name) == 0) {
-            // available_commands[i].handler(event);
-            available_commands[i].handler(server_buffer, fd);
+            available_commands[i].handler(socket_data);
         }
     }
     // TODO: Handle errors?
@@ -100,49 +93,25 @@ int process_event(parser_event * event, buffer * server_buffer, const int fd) {
  */
 
 static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
-    struct buffer serverBuf;
-    // buffer *bS = &serverBuf;
-    uint8_t serverDirectBuff[1024];
-    buffer_init(&serverBuf, N(serverDirectBuff), serverDirectBuff);
-
-    struct buffer clientBuf;
-    // buffer *bC = &clientBuf;
-    uint8_t clientDirectBuffer[1024];
-    buffer_init(&clientBuf, N(clientDirectBuffer), clientDirectBuffer);
-    
-    memcpy(serverDirectBuff, "+OK POP3 server ready\r\n", 23);
-    buffer_write_adv(&serverBuf, 23);
-    sock_blocking_write(fd, &serverBuf);
-
+    SocketData * socket_data = initialize_socket_data(fd);
+    socket_write(socket_data, "+OK POP3 server ready\r\n", 23);
    {
-    // bool error = false;
-    size_t buffsize;
     ssize_t n;
-    // struct pop3_cmd_parser pop3cmd_parser;
-    // pop3_cmd_parser_init(&pop3cmd_parser);
-
     extern parser_definition pop3_parser_definition;
     parser * pop3parser = parser_init(NULL, &pop3_parser_definition);
 
     while(true) {
-        uint8_t *clientBufWritePtr = buffer_write_ptr(&clientBuf, &buffsize);
-        n = recv(fd, clientBufWritePtr, buffsize, 0);
+        n = socket_data_receive(socket_data);
         if(n > 0) {
-            buffer_write_adv(&clientBuf, n);
-            if (consume_pop3_buffer(pop3parser, &clientBuf, n) == 0) {
+            if (consume_pop3_buffer(pop3parser, socket_data, n) == 0) {
                 parser_event * event = parser_get_event(pop3parser);
                 if (event != NULL)
-                    process_event(event, &serverBuf, fd);
+                    process_event(event, socket_data);
             }
         } else {
             break;
         }   
     } 
-    // if(!hello_is_done(hello_parser.state, &error)) {
-    //     error = true;
-    // }
-    // hello_parser_close(&hello_parser);
-    // return error;
    } 
     close(fd);
 }

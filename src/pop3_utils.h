@@ -1,3 +1,8 @@
+#ifndef POP3_UTILS_H
+#define POP3_UTILS_H
+
+#include "socket_data.h"
+
 typedef enum command_id {
     CAPA,
     USER,
@@ -17,5 +22,7 @@ typedef enum command_id {
 typedef struct command_description {
     command_id id;
     char * name;
-    void (*handler)(buffer * serverBuffer, const int fd);
+    void (*handler)(SocketData * socket_data);
 } command_description;
+
+#endif
