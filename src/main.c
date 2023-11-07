@@ -25,19 +25,7 @@
 #include "pop3_utils.h"
 #include "parser/parser.h"
 #include "socket_data.h"
-
-// TODO: Mover de aca a un utils
-#define N(x) (sizeof(x)/sizeof((x)[0]))
-
-/**
- * estructura utilizada para transportar datos entre el hilo
- * que acepta sockets y los hilos que procesa cada conexión
- */
-struct connection {
-  int fd; 
-  socklen_t addrlen;
-  struct sockaddr_in6 addr;
-};
+#include "args.h"
 
 static bool done = false;
 
@@ -46,161 +34,17 @@ static void sigterm_handler(const int signal) {
     done = true;
 }
 
-void noop_handler(SocketData * socket_data) {
-    printf("NOOP detected :D\n");
-    socket_write(socket_data, "+OK\r\n", 6);
-}
 
-void capa_handler(SocketData * socket_data) {
-    printf("CAPA detected :O\n");
-}
+int main(const int argc, char **argv) {
+    pop3Args pop3args;
+    parse_args(argc, argv, &pop3args);
 
-command_description available_commands[] = {
-    {.id = CAPA, .name = "CAPA", .handler = capa_handler},
-    {.id = NOOP, .name = "NOOP", .handler = noop_handler},
-};
-
-
-int consume_pop3_buffer(parser * pop3parser, SocketData * socket_data, ssize_t n) {
-    for (int i=0; i<n; i++) {
-        const uint8_t c = socket_data_read(socket_data);
-        const parser_event * event = parser_feed(pop3parser, c);
-        if (event == NULL)
-            return -1;
-        if (event->finished) {
-           add_finished_event(pop3parser); 
-        }
-    }
-    // TODO: Handle errors?
-    return 0;
-}
-
-int process_event(parser_event * event, SocketData * socket_data) {
-    for (int i = 0; i < (int) N(available_commands); i++) {
-        if (strcmp(event->command, available_commands[i].name) == 0) {
-            available_commands[i].handler(socket_data);
-        }
-    }
-    // TODO: Handle errors?
-    return 0;
-}
-
-/**
- * maneja cada conexión entrante
- *
- * @param fd   descriptor de la conexión entrante.
- * @param caddr información de la conexiónentrante.
- */
-
-static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
-    SocketData * socket_data = initialize_socket_data(fd);
-    socket_write(socket_data, "+OK POP3 server ready\r\n", 23);
-   {
-    ssize_t n;
-    extern parser_definition pop3_parser_definition;
-    parser * pop3parser = parser_init(NULL, &pop3_parser_definition);
-
-    while(true) {
-        n = socket_data_receive(socket_data);
-        if(n > 0) {
-            if (consume_pop3_buffer(pop3parser, socket_data, n) == 0) {
-                parser_event * event = parser_get_event(pop3parser);
-                if (event != NULL)
-                    process_event(event, socket_data);
-            }
-        } else {
-            break;
-        }   
-    } 
-   } 
-    close(fd);
-}
-
-
-/** rutina de cada hilo worker */
-
-static void * handle_connection_pthread(void *args) {
-  const struct connection *c = args;
-  pthread_detach(pthread_self());
-  pop3_handle_connection(c->fd, (struct sockaddr *)&c->addr);
-  free(args);
-  return 0;
-}
-
-
-int serve_pop3_concurrent_blocking(const int server)
-{
-    for (;!done;)
-    {
-        struct sockaddr_in6 caddr;
-        socklen_t caddrlen = sizeof(caddr);
-        // Wait for a client to connect
-        const int client = accept(server, (struct sockaddr *)&caddr, &caddrlen);
-        if (client < 0) {
-            perror("unable to accept incoming socket");
-        }
-        else {
-            // TODO(juan): limitar la cantidad de hilos concurrentes
-            struct connection *c = malloc(sizeof(struct connection));
-            if (c == NULL) {
-                // lo trabajamos iterativamente
-                pop3_handle_connection(client, (struct sockaddr *)&caddr);
-            }
-            else
-            {
-                pthread_t tid;
-                c->fd = client;
-                c->addrlen = caddrlen;
-                memcpy(&(c->addr), &caddr, caddrlen);
-
-                if (pthread_create(&tid, 0, handle_connection_pthread, c)) {
-                    free(c);
-                    // lo trabajamos iterativamente
-                    pop3_handle_connection(client, (struct sockaddr *)&caddr);
-                }
-            }
-        }
-    }
-    return 0;
-}
-
-
-/**
-
-* atiende a los clientes de forma concurrente con I/O bloqueante.
-
-*/
-
-int main(const int argc, const char **argv)
-{
-    unsigned port = 1110;
-
-    if (argc == 1)
-    {
-        // utilizamos el default
-    }
-    else if (argc == 2)
-    {
-        char *end = 0;
-        const long sl = strtol(argv[1], &end, 10);
-
-        if (end == argv[1] || '\0' != *end || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno) || sl < 0 || sl > USHRT_MAX)
-        {
-            fprintf(stderr, "port should be an integer: %s\n", argv[1]);
-            return 1;
-        }
-        port = sl;
-    }
-    else
-    {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-    }
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(port);
+    addr.sin_port = htons(pop3args.pop3_port);
 
     const char *err_msg;
 
@@ -211,7 +55,7 @@ int main(const int argc, const char **argv)
         goto finally;
     }
 
-    fprintf(stdout, "Listening on TCP port %d\n", port);
+    fprintf(stdout, "Listening on TCP port %d\n", pop3args.pop3_port);
 
     // man 7 ip. no importa reportar nada si falla.
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));

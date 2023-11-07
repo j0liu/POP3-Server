@@ -2,6 +2,9 @@
 #define POP3_UTILS_H
 
 #include "socket_data.h"
+#include "parser/parser.h"
+
+#define N(x) (sizeof(x)/sizeof((x)[0]))
 
 typedef enum command_id {
     CAPA,
@@ -24,5 +27,20 @@ typedef struct command_description {
     char * name;
     void (*handler)(SocketData * socket_data);
 } command_description;
+
+/**
+ * estructura utilizada para transportar datos entre el hilo
+ * que acepta sockets y los hilos que procesa cada conexión
+ */
+struct connection {
+  int fd; 
+  socklen_t addrlen;
+  struct sockaddr_in6 addr;
+};
+
+int consume_pop3_buffer(parser * pop3parser, SocketData * socket_data, ssize_t n);
+int process_event(parser_event * event, SocketData * socket_data);
+int serve_pop3_concurrent_blocking(const int server);
+
 
 #endif
