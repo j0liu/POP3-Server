@@ -45,13 +45,20 @@ static void sigterm_handler(const int signal) {
     done = true;
 }
 
-void noop_handler() {
+void noop_handler(buffer * server_buffer, const int fd) {
     printf("NOOP detected :D\n");
-
+    size_t buffsize;
+    uint8_t * buffer_ptr = buffer_write_ptr(server_buffer, &buffsize);
+    memcpy(buffer_ptr, "+OK\r\n", 6);
+    buffer_write_adv(server_buffer, 6);
+    sock_blocking_write(fd, server_buffer);
 }
 
-void capa_handler() {
+void capa_handler(buffer * server_buffer, const int fd) {
     printf("CAPA detected :O\n");
+    // memcpy(serverDirectBuff, "+OK POP3 server ready\r\n", 23);
+    // buffer_write_adv(&serverBuf, 23);
+    // sock_blocking_write(fd, &serverBuf);
 }
 
 command_description available_commands[] = {
@@ -74,11 +81,11 @@ int consume_pop3_buffer(parser * pop3parser, buffer * client_buffer, ssize_t n) 
     return 0;
 }
 
-int process_event(parser_event * event) {
+int process_event(parser_event * event, buffer * server_buffer, const int fd) {
     for (int i = 0; i < (int) N(available_commands); i++) {
         if (strcmp(event->command, available_commands[i].name) == 0) {
             // available_commands[i].handler(event);
-            available_commands[i].handler();
+            available_commands[i].handler(server_buffer, fd);
         }
     }
     // TODO: Handle errors?
@@ -125,7 +132,7 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
             if (consume_pop3_buffer(pop3parser, &clientBuf, n) == 0) {
                 parser_event * event = parser_get_event(pop3parser);
                 if (event != NULL)
-                    process_event(event);
+                    process_event(event, &serverBuf, fd);
             }
         } else {
             break;
