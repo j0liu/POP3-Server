@@ -36,7 +36,7 @@ static void sigterm_handler(const int signal) {
 
 
 int main(const int argc, char **argv) {
-    pop3Args pop3args;
+    Pop3Args pop3args;
     parse_args(argc, argv, &pop3args);
 
 
@@ -78,7 +78,7 @@ int main(const int argc, char **argv) {
     signal(SIGINT,  sigterm_handler);
 
     err_msg = 0;
-    int ret = serve_pop3_concurrent_blocking(server);
+    int ret = serve_pop3_concurrent_blocking(server, &pop3args);
 
 
     getchar();

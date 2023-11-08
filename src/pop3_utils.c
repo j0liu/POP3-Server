@@ -19,21 +19,31 @@
 #include "parser/parser.h"
 #include "socket_data.h"
 
+Pop3Args * pop3args;
 
-void noop_handler(SocketData * socket_data) {
+
+void noop_handler(SocketData * socket_data, char * commandParameters, uint8_t parameters_length) {
     printf("NOOP detected :D\n");
     socket_write(socket_data, "+OK\r\n", 6);
 }
 
 #define CAPA_MSG "+OK Capability list follows\r\nUSER\r\nPASS\r\nSTAT\r\nLIST\r\nRETR\r\nDELE\r\nNOOP\r\nRSET\r\nQUIT\r\n.\r\n"
 
-void capa_handler(SocketData * socket_data) {
+void capa_handler(SocketData * socket_data, char * commandParameters, uint8_t parameters_length) {
     printf("CAPA detected :O\n");
     socket_write(socket_data, CAPA_MSG, sizeof CAPA_MSG - 1);
 }
 
-void user_handler(SocketData * socket_data) {
+void user_handler(SocketData * socket_data, char * commandParameters, uint8_t parameters_length) {
     printf("USER detected >:)\n");
+    for (int i = 0; i < pop3args->quantity_users; i++) {
+        // TODO: Validate the comparison to prevent segfaults?
+        printf("%s %s\n", commandParameters, pop3args->users[i].name);
+        if (strcmp(pop3args->users[i].name, commandParameters) == 0) {
+            socket_write(socket_data, "+OK ;)\r\n", 9); 
+            return;
+        }
+    }
     socket_write(socket_data, "+OK\r\n", 6);
 }
 
@@ -60,7 +70,7 @@ int consume_pop3_buffer(parser * pop3parser, SocketData * socket_data, ssize_t n
 int process_event(parser_event * event, SocketData * socket_data) {
     for (int i = 0; i < (int) N(available_commands); i++) {
         if (strcmp(event->command, available_commands[i].name) == 0) {
-            available_commands[i].handler(socket_data);
+            available_commands[i].handler(socket_data, event->args, event->args_length);
         }
     }
     // TODO: Handle errors?
@@ -109,8 +119,9 @@ static void * handle_connection_pthread(void *args) {
 }
 
 
-int serve_pop3_concurrent_blocking(const int server)
-{
+int serve_pop3_concurrent_blocking(const int server, Pop3Args * receivedArgs) {
+    pop3args = receivedArgs; // TODO: Improve
+
     // TODO: add something similar to 'done' again
     for (;;)
     {

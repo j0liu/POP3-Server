@@ -60,7 +60,7 @@ usage(const char *progname) {
 }
 
 void 
-parse_args(const int argc, char **argv, pop3Args *args) {
+parse_args(const int argc, char **argv, Pop3Args *args) {
     memset(args, 0, sizeof(*args)); // sobre todo para setear en null los punteros de users
 
     args->maildir_path = "./Maildir";
@@ -68,7 +68,7 @@ parse_args(const int argc, char **argv, pop3Args *args) {
     // TODO: Default users?
     
     int c;
-    int nusers = 0;
+    args->quantity_users = 0;
 
     while (true) {
         c = getopt(argc, argv, "hp:u:vd:");
@@ -84,12 +84,12 @@ parse_args(const int argc, char **argv, pop3Args *args) {
                 args->pop3_port = port(optarg);
                 break;
             case 'u':
-                if(nusers >= MAX_USERS) {
-                    fprintf(stderr, "maximun number of command line users reached: %d.\n", MAX_USERS);
+                if(args->quantity_users >= MAX_USERS) {
+                    fprintf(stderr, "maximum number of command line users reached: %d.\n", MAX_USERS);
                     exit(1);
                 } else {
-                    user(optarg, args->users + nusers);
-                    nusers++;
+                    user(optarg, &args->users[args->quantity_users]);
+                    args->quantity_users++;
                 }
                 break;
             case 'v':
