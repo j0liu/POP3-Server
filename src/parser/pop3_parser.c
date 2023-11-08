@@ -39,14 +39,14 @@ static const struct parser_state_transition ST_SECOND_L [] = {
 };
 
 static const struct parser_state_transition ST_THIRD_L [] = {
-    { .when = ' ',      .dest = ARGS,       .act = arg_action },
-    { .when = '\r',     .dest = ENDING,     .act = NULL       },
-    { .when = ANY,      .dest = ERROR,      .act = cmd_action }
+    { .when = ' ',      .dest = ARGS,                   .act = NULL       },
+    { .when = '\r',     .dest = ENDING,                 .act = NULL       },
+    { .when = ANY,      .dest = FOURTH_LETTER_CMD,      .act = cmd_action }
 };
 
 static const struct parser_state_transition ST_FOURTH_L [] = {
-    { .when = ' ',      .dest = ARGS,       .act = arg_action },
-    { .when = '\r',     .dest = ENDING,     .act = NULL       },
+    { .when = ' ',      .dest = ARGS,       .act = NULL },
+    { .when = '\r',     .dest = ENDING,     .act = NULL },
     { .when = ANY,      .dest = ERROR,      .act = NULL }
 };
 
@@ -110,8 +110,10 @@ static void arg_action(parser_event *event, const uint8_t c) {
     // TODO: Handle errors
 }
 
-static void finish_action(parser_event *ret, const uint8_t c) {
-    ret->finished = true;
+static void finish_action(parser_event *event, const uint8_t c) {
+    event->command[event->command_length] = '\0';
+    event->args[event->args_length] = '\0';
+    event->finished = true;
 }
 
 

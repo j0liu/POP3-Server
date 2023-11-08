@@ -2,6 +2,7 @@
 #define ARGS_H_kFlmYm1tW9p5npzDr2opQJ9jM8
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #define MAX_USERS 10
 
@@ -15,7 +16,7 @@ typedef struct Pop3Args {
     char *          maildir_path; 
 
     struct users    users[MAX_USERS];
-    ssize_t quantity_users;
+    size_t quantity_users;
 } Pop3Args;
 
 /**

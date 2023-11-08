@@ -20,7 +20,8 @@ typedef struct parser_definition parser_definition;
 typedef void (*parser_action)(struct parser_event *ret, const uint8_t c);
 
 
-#define COMMAND_LENGTH 4
+#define COMMAND_LENGTH 5
+// TODO: Cambiar, esta mal
 #define ARGS_LENGTH 82  // 40*2 + ESPACIO + NULL TERMINATED
 
 /**

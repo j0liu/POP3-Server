@@ -36,7 +36,7 @@ void capa_handler(SocketData * socket_data, char * commandParameters, uint8_t pa
 
 void user_handler(SocketData * socket_data, char * commandParameters, uint8_t parameters_length) {
     printf("USER detected >:)\n");
-    for (int i = 0; i < pop3args->quantity_users; i++) {
+    for (int i = 0; i < (int) pop3args->quantity_users; i++) {
         // TODO: Validate the comparison to prevent segfaults?
         printf("%s %s\n", commandParameters, pop3args->users[i].name);
         if (strcmp(pop3args->users[i].name, commandParameters) == 0) {
