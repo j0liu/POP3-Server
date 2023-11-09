@@ -18,44 +18,63 @@
 #include "pop3_utils.h"
 #include "parser/parser.h"
 #include "socket_data.h"
-
+#include "client_data.h"
 Pop3Args * pop3args;
 
 
-void noop_handler(SocketData * socket_data, char * commandParameters, uint8_t parameters_length) {
+void noop_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
     printf("NOOP detected :D\n");
-    socket_write(socket_data, "+OK\r\n", 6);
+    socket_write(client_data->socket_data, "+OK\r\n", 6);
 }
 
 #define CAPA_MSG "+OK Capability list follows\r\nUSER\r\nPASS\r\nSTAT\r\nLIST\r\nRETR\r\nDELE\r\nNOOP\r\nRSET\r\nQUIT\r\n.\r\n"
+#define MALFORMED_COMMAND "-ERR Comando malformado\r\n"
 
-void capa_handler(SocketData * socket_data, char * commandParameters, uint8_t parameters_length) {
+void capa_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
     printf("CAPA detected :O\n");
-    socket_write(socket_data, CAPA_MSG, sizeof CAPA_MSG - 1);
+    socket_write(client_data->socket_data, CAPA_MSG, sizeof CAPA_MSG - 1);
 }
 
-void user_handler(SocketData * socket_data, char * commandParameters, uint8_t parameters_length) {
+void user_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
     printf("USER detected >:)\n");
     for (int i = 0; i < (int) pop3args->quantity_users; i++) {
         // TODO: Validate the comparison to prevent segfaults?
-        printf("%s %s\n", commandParameters, pop3args->users[i].name);
         if (strcmp(pop3args->users[i].name, commandParameters) == 0) {
-            socket_write(socket_data, "+OK ;)\r\n", 9); 
+            socket_write(client_data->socket_data, "+OK ;)\r\n", 9); 
+            client_data->user = &pop3args->users[i];
             return;
         }
     }
-    socket_write(socket_data, "+OK\r\n", 6);
+    socket_write(client_data->socket_data, "+OK\r\n", 6);
 }
 
-command_description available_commands[] = {
-    {.id = CAPA, .name = "CAPA", .handler = capa_handler},
-    {.id = NOOP, .name = "NOOP", .handler = noop_handler},
-    {.id = USER, .name = "USER", .handler = user_handler}
+void pass_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+    printf("PASS detected :P\n");
+    if (client_data->user == NULL) {
+        socket_write(client_data->socket_data, MALFORMED_COMMAND, sizeof MALFORMED_COMMAND - 1);
+        return;
+    }
+    if (strcmp(client_data->user->pass, commandParameters) == 0) {
+        socket_write(client_data->socket_data, "+OK 8)\r\n", 9);
+        client_data->state = TRANSACTION;
+        return;
+    } else {
+        socket_write(client_data->socket_data, "-ERR 8(\r\n", 9);
+        return;
+    }
+    
+}
+
+CommandDescription available_commands[] = {
+    {.id = CAPA, .name = "CAPA", .handler = capa_handler, .valid_states = AUTHORIZATION | TRANSACTION },
+    {.id = NOOP, .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
+    {.id = USER, .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
+    {.id = PASS, .name = "PASS", .handler = pass_handler, .valid_states = AUTHORIZATION },
 };
 
-int consume_pop3_buffer(parser * pop3parser, SocketData * socket_data, ssize_t n) {
+int consume_pop3_buffer(parser * pop3parser, ClientData * client_data, ssize_t n) {
     for (int i=0; i<n; i++) {
-        const uint8_t c = socket_data_read(socket_data);
+        const uint8_t c = socket_data_read(client_data->socket_data);
         const parser_event * event = parser_feed(pop3parser, c);
         if (event == NULL)
             return -1;
@@ -67,14 +86,20 @@ int consume_pop3_buffer(parser * pop3parser, SocketData * socket_data, ssize_t n
     return 0;
 }
 
-int process_event(parser_event * event, SocketData * socket_data) {
+int process_event(parser_event * event, ClientData * client_data) {
     for (int i = 0; i < (int) N(available_commands); i++) {
         if (strcmp(event->command, available_commands[i].name) == 0) {
-            available_commands[i].handler(socket_data, event->args, event->args_length);
+            if((client_data->state & available_commands[i].valid_states) == 0) {
+                socket_write(client_data->socket_data, "-ERR Comando a destiempo\r\n", 27);
+                return -1;
+            }
+            available_commands[i].handler(client_data, event->args, event->args_length);
+
+            return 0;
         }
     }
     // TODO: Handle errors?
-    return 0;
+    return -1;
 }
 
 /**
@@ -87,24 +112,24 @@ int process_event(parser_event * event, SocketData * socket_data) {
 static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     SocketData * socket_data = initialize_socket_data(fd);
     socket_write(socket_data, "+OK POP3 server ready\r\n", 23);
-   {
+    ClientData * client_data = initialize_client_data(socket_data);
+
     ssize_t n;
     extern parser_definition pop3_parser_definition;
     parser * pop3parser = parser_init(NULL, &pop3_parser_definition);
 
     while(true) {
-        n = socket_data_receive(socket_data);
+        n = socket_data_receive(client_data->socket_data);
         if(n > 0) {
-            if (consume_pop3_buffer(pop3parser, socket_data, n) == 0) {
+            if (consume_pop3_buffer(pop3parser, client_data, n) == 0) {
                 parser_event * event = parser_get_event(pop3parser);
                 if (event != NULL)
-                    process_event(event, socket_data);
+                    process_event(event, client_data);
             }
         } else {
             break;
         }   
     } 
-   } 
     close(fd);
 }
 

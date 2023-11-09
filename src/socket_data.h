@@ -4,7 +4,7 @@
 #include "buffer.h"
 #include <stdint.h>
 
-typedef struct {
+typedef struct SocketData {
     buffer client_buffer;
     buffer server_buffer;
     int fd;

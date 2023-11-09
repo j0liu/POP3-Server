@@ -39,7 +39,6 @@ int main(const int argc, char **argv) {
     Pop3Args pop3args;
     parse_args(argc, argv, &pop3args);
 
-
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
@@ -79,7 +78,6 @@ int main(const int argc, char **argv) {
 
     err_msg = 0;
     int ret = serve_pop3_concurrent_blocking(server, &pop3args);
-
 
     getchar();
 
