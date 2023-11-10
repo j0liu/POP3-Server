@@ -57,12 +57,22 @@ void pass_handler(ClientData * client_data, char * commandParameters, uint8_t pa
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
         socket_write(client_data->socket_data, "+OK 8)\r\n", 9);
         client_data->state = TRANSACTION;
-        return;
-    } else {
-        socket_write(client_data->socket_data, "-ERR 8(\r\n", 9);
+        client_data->mail_info_list = get_mail_info_list(pop3args->maildir_path, &client_data->mail_count);
         return;
     }
+    socket_write(client_data->socket_data, "-ERR 8(\r\n", 9);
+    return;
     
+}
+
+void list_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+    // TODO: Ver size constante
+    char buffer[100] = {0};
+    for (int i=0; i < client_data->mail_count; i++) {
+        int len = sprintf(buffer, "%d %ld %s\r\n", i+1, client_data->mail_info_list[i].size, client_data->mail_info_list[i].filename);
+        // printf("n: %s", client_data->mail_info_list[i].filename);
+        socket_write(client_data->socket_data, buffer, len);
+    }
 }
 
 CommandDescription available_commands[] = {
@@ -70,6 +80,8 @@ CommandDescription available_commands[] = {
     {.id = NOOP, .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
     {.id = USER, .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
     {.id = PASS, .name = "PASS", .handler = pass_handler, .valid_states = AUTHORIZATION },
+    {.id = PASS, .name = "LIST", .handler = list_handler, .valid_states = TRANSACTION },
+
 };
 
 int consume_pop3_buffer(parser * pop3parser, ClientData * client_data, ssize_t n) {
