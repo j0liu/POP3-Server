@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <limits.h>
@@ -29,13 +30,20 @@ Pop3Args * pop3args;
 #define CAPA_MSG_AUTHORIZATION (OK CRLF "CAPA" CRLF "USER" CRLF "PIPELINING" CRLF "." CRLF)
 #define CAPA_MSG_TRANSACTION (OK CRLF "CAPA" CRLF "PIPELINING" CRLF "." CRLF)
 #define NO_USERNAME_GIVEN (ERR " No username given." CRLF)
-#define UNKNOWN_COMMAND (ERR " Unknown command:  %s")
+#define NO_MSG_NUMBER_GIVEN (ERR " Message number required." CRLF)
+#define UNKNOWN_COMMAND (ERR " Unknown command: %s" CRLF)
 #define LOGGING_IN (OK " Logged in." CRLF)
 #define LOGGING_OUT (OK " Logging out." CRLF)
-#define AUTH_FAILED (ERR " [AUTH] Authentication failed.")
+#define AUTH_FAILED (ERR " [AUTH] Authentication failed." CRLF)
 #define DISCONNECTED_FOR_INACTIVITY (ERR " Disconnected for inactivity." CRLF)
-#define OK_LIST (OK " %d messages:" CRLF)
+#define ERR_NOISE (ERR " Noise after message number: %s" CRLF)
+#define ERR_INVALID_NUMBER (ERR " Invalid message number: %s" CRLF)
+#define OK_OCTETS (OK " %ld octets" CRLF)
 #define TERMINATION ("." CRLF)
+// LIST
+#define OK_LIST (OK " %d messages:" CRLF)
+#define NO_MESSAGE_LIST (ERR " There's no message %d." CRLF)
+#define INVALID_NUMBER_LIST (ERR " Invalid message number: %d" CRLF)
 
 
 static void noop_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
@@ -76,22 +84,61 @@ static void pass_handler(ClientData * client_data, char * commandParameters, uin
     }
     socket_write(client_data->socket_data, AUTH_FAILED, sizeof AUTH_FAILED - 1);
     return;
-    
+}
+
+
+static int first_argument_to_int(ClientData * client_data, char * commandParameters)  {
+    char * endptr;
+    int num = -1, len;
+    if (commandParameters != NULL) {
+        num = strtol(commandParameters, &endptr, 10);
+        if (num > 0 && num < client_data->mail_count && *endptr == '\0' && endptr != commandParameters)
+            return num;
+    }
+    char buff[100] = {0}; // TODO: Improve
+    if(num <= 0 || endptr == commandParameters) {
+        len = sprintf(buff, ERR_INVALID_NUMBER, commandParameters != NULL ? commandParameters : "");
+    } else if (*endptr != '\0') {
+        len = sprintf(buff, ERR_NOISE, endptr);
+    } else if (num > client_data->mail_count) {
+        len = sprintf(buff, NO_MESSAGE_LIST, num);
+    }
+    socket_write(client_data->socket_data, buff, len);
+    return -1;
 }
 
 static void list_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    char initial_message[50] = {0}; 
-    int len = sprintf(initial_message, OK_LIST, client_data->mail_count);
-    socket_write(client_data->socket_data, initial_message, len); 
-
-    // TODO: Ver size constante
-    char buffer[100] = {0};
-    for (int i=0; i < client_data->mail_count; i++) {
-        int len = sprintf(buffer, "%d %ld" CRLF, i+1, client_data->mail_info_list[i].size);
-        // printf("n: %s", client_data->mail_info_list[i].filename);
-        socket_write(client_data->socket_data, buffer, len);
+    char buff[100] = {0}; // TODO: Improve
+    while(*commandParameters == ' ') {commandParameters++; parameters_length--;}
+    
+    if (parameters_length == 0) {
+        for (int i=0; i < client_data->mail_count; i++) {
+            int len = sprintf(buff, "%d %ld" CRLF, i+1, client_data->mail_info_list[i].size);
+            socket_write(client_data->socket_data, buff, len);
+        }
+        socket_write(client_data->socket_data, TERMINATION, sizeof TERMINATION - 1);
+    } else {
+        int num = first_argument_to_int(client_data, commandParameters);
+        if (num > 0) {
+            int len = sprintf(buff, OK " %d %ld" CRLF, num, client_data->mail_info_list[num-1].size);
+            socket_write(client_data->socket_data, buff, len);   
+        }
     }
-    socket_write(client_data->socket_data, TERMINATION, sizeof TERMINATION - 1);
+}
+
+static void retr_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+    while(*commandParameters == ' ') {commandParameters++; parameters_length--;}
+    if (parameters_length == 0) {
+       socket_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1); 
+       return;
+    }
+    int num = first_argument_to_int(client_data, commandParameters);
+    if (num > 0) {
+        char initial_message[50] = {0}; 
+        int len = sprintf(initial_message, OK_OCTETS, client_data->mail_info_list[num].size);
+        socket_write(client_data->socket_data, initial_message, len); 
+    }
+
 }
 
 CommandDescription available_commands[] = {
@@ -99,8 +146,8 @@ CommandDescription available_commands[] = {
     {.id = NOOP, .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
     {.id = USER, .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
     {.id = PASS, .name = "PASS", .handler = pass_handler, .valid_states = AUTHORIZATION },
-    {.id = PASS, .name = "LIST", .handler = list_handler, .valid_states = TRANSACTION },
-
+    {.id = LIST, .name = "LIST", .handler = list_handler, .valid_states = TRANSACTION },
+    {.id = RETR, .name = "RETR", .handler = retr_handler, .valid_states = TRANSACTION },
 };
 
 static int consume_pop3_buffer(parser * pop3parser, ClientData * client_data) {
@@ -118,7 +165,7 @@ static int consume_pop3_buffer(parser * pop3parser, ClientData * client_data) {
 
 static int process_event(parser_event * event, ClientData * client_data) {
     for (int i = 0; i < (int) N(available_commands); i++) {
-        if (strncmp(event->command, available_commands[i].name, 4) == 0) {
+        if (strncasecmp(event->command, available_commands[i].name, 4) == 0) {
             if((client_data->state & available_commands[i].valid_states) == 0) {
                 char initial_message[50] = {0}; 
                 int len = sprintf(initial_message, UNKNOWN_COMMAND, event->command);
@@ -130,6 +177,10 @@ static int process_event(parser_event * event, ClientData * client_data) {
             return 0;
         }
     }
+
+    char buff[100] = {0}; // TODO: Improve
+    int len = sprintf(buff, UNKNOWN_COMMAND, event->command);
+    socket_write(client_data->socket_data, buff, len); 
     // TODO: Handle errors?
     return -1;
 }
@@ -149,7 +200,7 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     extern parser_definition pop3_parser_definition;
     parser * pop3parser = parser_init(NULL, &pop3_parser_definition);
 
-    while(socket_data_receive(client_data->socket_data) > 0) {
+    while(buffer_can_read(&client_data->socket_data->client_buffer) || socket_data_receive(client_data->socket_data) > 0) {
         if (consume_pop3_buffer(pop3parser, client_data) == 0) {
             parser_event * event = parser_pop_event(pop3parser);
             if (event != NULL) {

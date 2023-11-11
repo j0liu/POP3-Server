@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include "parser.h"
+#include <ctype.h>
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -62,7 +63,7 @@ static const struct parser_state_transition ST_ENDING [] = {
 };
 
 static const struct parser_state_transition ST_ERROR [] = {
-    { .when = '\r',     .dest = ENDING,      .act = NULL },
+    { .when = '\r',     .dest = ENDING,      .act = finish_action }, //TODO arreglar xd
     { .when = ANY,      .dest = ERROR,       .act = NULL }
 };
 
@@ -115,6 +116,3 @@ static void finish_action(parser_event *event, const uint8_t c) {
     event->args[event->args_length] = '\0';
     event->finished = true;
 }
-
-
-
