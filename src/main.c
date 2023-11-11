@@ -79,8 +79,6 @@ int main(const int argc, char **argv) {
     err_msg = 0;
     int ret = serve_pop3_concurrent_blocking(server, &pop3args);
 
-    getchar();
-
 finally:
     if (err_msg)
     {

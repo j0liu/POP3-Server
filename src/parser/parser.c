@@ -14,8 +14,6 @@ struct parser{
     unsigned state;
 
     parser_event *eventToReturn;
-    parser_event *list;
-    parser_event *last;
 };
 
 void parser_destroy(struct parser *p) {
@@ -30,8 +28,8 @@ struct parser * parser_init(const unsigned *classes, const struct parser_definit
         memset(newParser, 0, sizeof(*newParser));
         newParser->def     = def;
         newParser->state   = def->start_state;
-        newParser->list    = NULL;
-        newParser->last    = NULL;
+        // newParser->list    = NULL;
+        // newParser->last    = NULL;
         newParser->eventToReturn = calloc(1, sizeof(parser_event));
     }
     return newParser;
@@ -62,10 +60,6 @@ const struct parser_event * parser_feed(struct parser *p, const uint8_t c) {
             if (state[i].act != NULL) {
                 state[i].act(p->eventToReturn, c);
             }
-            // if(state[i].act2 != NULL) {
-            //     p->e1.next = &p->e2;
-            //     state[i].act2(&p->e2, c);
-            // }
             p->state = state[i].dest;
             break;
         }
@@ -80,23 +74,26 @@ const struct parser_event * parser_feed(struct parser *p, const uint8_t c) {
 //     return classes;
 // }
 
-void add_finished_event(parser * p) {
-    if(p->list == NULL) {
-        p->list = p->eventToReturn;
-        p->last = p->eventToReturn;
-    } else {
-        p->last->next = p->eventToReturn;
-        p->last = p->eventToReturn;
-    }
-    p->eventToReturn = calloc(1, sizeof(parser_event));
-}
+// void add_finished_event(parser * p) {
+//     if(p->list == NULL) {
+//         p->list = p->eventToReturn;
+//         p->last = p->eventToReturn;
+//     } else {
+//         p->last->next = p->eventToReturn;
+//         p->last = p->eventToReturn;
+//     }
+//     p->eventToReturn = calloc(1, sizeof(parser_event));
+// }
 
-parser_event * parser_get_event(parser * p) {
-    if(p->list == NULL) {
-        return NULL;
-    } else {
-        parser_event * ret = p->list;
-        p->list = p->list->next;
-        return ret;
-    }
+parser_event * parser_pop_event(parser * p) {
+    // if(p->list == NULL) {
+    //     return NULL;
+    // } else {
+    //     parser_event * ret = p->list;
+    //     p->list = p->list->next;
+    //     return ret;
+    // }
+    parser_event * ret = p->eventToReturn;
+    p->eventToReturn = calloc(1, sizeof(parser_event));
+    return ret; 
 }

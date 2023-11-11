@@ -41,8 +41,6 @@ struct connection {
   struct sockaddr_in6 addr;
 };
 
-int consume_pop3_buffer(parser * pop3parser, ClientData * client_data, ssize_t n);
-int process_event(parser_event * event, ClientData * client_data);
 int serve_pop3_concurrent_blocking(const int server, Pop3Args * popargs);
 
 

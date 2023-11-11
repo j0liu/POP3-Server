@@ -21,58 +21,77 @@
 #include "client_data.h"
 Pop3Args * pop3args;
 
+#define CRLF "\r\n"
+#define OK "+OK"
+#define OKCRLF (OK CRLF)
+#define ERR "-ERR"
+#define SERVER_READY OK " POP3 Party Started" CRLF
+#define CAPA_MSG_AUTHORIZATION (OK CRLF "CAPA" CRLF "USER" CRLF "PIPELINING" CRLF "." CRLF)
+#define CAPA_MSG_TRANSACTION (OK CRLF "CAPA" CRLF "PIPELINING" CRLF "." CRLF)
+#define NO_USERNAME_GIVEN (ERR " No username given." CRLF)
+#define UNKNOWN_COMMAND (ERR " Unknown command:  %s")
+#define LOGGING_IN (OK " Logged in." CRLF)
+#define LOGGING_OUT (OK " Logging out." CRLF)
+#define AUTH_FAILED (ERR " [AUTH] Authentication failed.")
+#define DISCONNECTED_FOR_INACTIVITY (ERR " Disconnected for inactivity." CRLF)
+#define OK_LIST (OK " %d messages:" CRLF)
+#define TERMINATION ("." CRLF)
 
-void noop_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    printf("NOOP detected :D\n");
-    socket_write(client_data->socket_data, "+OK\r\n", 6);
+
+static void noop_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+    socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
 }
 
-#define CAPA_MSG "+OK Capability list follows\r\nUSER\r\nPASS\r\nSTAT\r\nLIST\r\nRETR\r\nDELE\r\nNOOP\r\nRSET\r\nQUIT\r\n.\r\n"
-#define MALFORMED_COMMAND "-ERR Comando malformado\r\n"
 
-void capa_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    printf("CAPA detected :O\n");
-    socket_write(client_data->socket_data, CAPA_MSG, sizeof CAPA_MSG - 1);
+static void capa_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+    if (client_data->state == AUTHORIZATION) {
+        socket_write(client_data->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1);
+        return;
+    }
+    socket_write(client_data->socket_data, CAPA_MSG_TRANSACTION, sizeof CAPA_MSG_TRANSACTION - 1);
 }
 
-void user_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    printf("USER detected >:)\n");
+static void user_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
     for (int i = 0; i < (int) pop3args->quantity_users; i++) {
         // TODO: Validate the comparison to prevent segfaults?
         if (strcmp(pop3args->users[i].name, commandParameters) == 0) {
-            socket_write(client_data->socket_data, "+OK ;)\r\n", 9); 
+            socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1); 
             client_data->user = &pop3args->users[i];
             return;
         }
     }
-    socket_write(client_data->socket_data, "+OK\r\n", 6);
+    socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
 }
 
-void pass_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    printf("PASS detected :P\n");
+static void pass_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
     if (client_data->user == NULL) {
-        socket_write(client_data->socket_data, MALFORMED_COMMAND, sizeof MALFORMED_COMMAND - 1);
+        socket_write(client_data->socket_data, NO_USERNAME_GIVEN, sizeof NO_USERNAME_GIVEN - 1); 
         return;
     }
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
-        socket_write(client_data->socket_data, "+OK 8)\r\n", 9);
+        socket_write(client_data->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->state = TRANSACTION;
         client_data->mail_info_list = get_mail_info_list(pop3args->maildir_path, &client_data->mail_count);
         return;
     }
-    socket_write(client_data->socket_data, "-ERR 8(\r\n", 9);
+    socket_write(client_data->socket_data, AUTH_FAILED, sizeof AUTH_FAILED - 1);
     return;
     
 }
 
-void list_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+static void list_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+    char initial_message[50] = {0}; 
+    int len = sprintf(initial_message, OK_LIST, client_data->mail_count);
+    socket_write(client_data->socket_data, initial_message, len); 
+
     // TODO: Ver size constante
     char buffer[100] = {0};
     for (int i=0; i < client_data->mail_count; i++) {
-        int len = sprintf(buffer, "%d %ld %s\r\n", i+1, client_data->mail_info_list[i].size, client_data->mail_info_list[i].filename);
+        int len = sprintf(buffer, "%d %ld" CRLF, i+1, client_data->mail_info_list[i].size);
         // printf("n: %s", client_data->mail_info_list[i].filename);
         socket_write(client_data->socket_data, buffer, len);
     }
+    socket_write(client_data->socket_data, TERMINATION, sizeof TERMINATION - 1);
 }
 
 CommandDescription available_commands[] = {
@@ -84,25 +103,26 @@ CommandDescription available_commands[] = {
 
 };
 
-int consume_pop3_buffer(parser * pop3parser, ClientData * client_data, ssize_t n) {
-    for (int i=0; i<n; i++) {
+static int consume_pop3_buffer(parser * pop3parser, ClientData * client_data) {
+    for (; buffer_can_read(&client_data->socket_data->client_buffer); ) {
         const uint8_t c = socket_data_read(client_data->socket_data);
         const parser_event * event = parser_feed(pop3parser, c);
         if (event == NULL)
             return -1;
-        if (event->finished) {
-           add_finished_event(pop3parser); 
-        }
+        if (event->finished)
+            return 0;
     }
     // TODO: Handle errors?
-    return 0;
+    return -1;
 }
 
-int process_event(parser_event * event, ClientData * client_data) {
+static int process_event(parser_event * event, ClientData * client_data) {
     for (int i = 0; i < (int) N(available_commands); i++) {
-        if (strcmp(event->command, available_commands[i].name) == 0) {
+        if (strncmp(event->command, available_commands[i].name, 4) == 0) {
             if((client_data->state & available_commands[i].valid_states) == 0) {
-                socket_write(client_data->socket_data, "-ERR Comando a destiempo\r\n", 27);
+                char initial_message[50] = {0}; 
+                int len = sprintf(initial_message, UNKNOWN_COMMAND, event->command);
+                socket_write(client_data->socket_data, initial_message, len);
                 return -1;
             }
             available_commands[i].handler(client_data, event->args, event->args_length);
@@ -123,24 +143,20 @@ int process_event(parser_event * event, ClientData * client_data) {
 
 static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     SocketData * socket_data = initialize_socket_data(fd);
-    socket_write(socket_data, "+OK POP3 server ready\r\n", 23);
+    socket_write(socket_data, SERVER_READY, sizeof SERVER_READY - 1);
     ClientData * client_data = initialize_client_data(socket_data);
 
-    ssize_t n;
     extern parser_definition pop3_parser_definition;
     parser * pop3parser = parser_init(NULL, &pop3_parser_definition);
 
-    while(true) {
-        n = socket_data_receive(client_data->socket_data);
-        if(n > 0) {
-            if (consume_pop3_buffer(pop3parser, client_data, n) == 0) {
-                parser_event * event = parser_get_event(pop3parser);
-                if (event != NULL)
-                    process_event(event, client_data);
+    while(socket_data_receive(client_data->socket_data) > 0) {
+        if (consume_pop3_buffer(pop3parser, client_data) == 0) {
+            parser_event * event = parser_pop_event(pop3parser);
+            if (event != NULL) {
+                process_event(event, client_data);
+                free(event);
             }
-        } else {
-            break;
-        }   
+        }
     } 
     close(fd);
 }
@@ -167,7 +183,7 @@ int serve_pop3_concurrent_blocking(const int server, Pop3Args * receivedArgs) {
         // Wait for a client to connect
         const int client = accept(server, (struct sockaddr *)&caddr, &caddrlen);
         if (client < 0) {
-            perror("unable to accept incoming socket");
+            perror("Unable to accept incoming socket");
         }
         else {
             // TODO(juan): limitar la cantidad de hilos concurrentes

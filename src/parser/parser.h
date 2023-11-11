@@ -36,7 +36,7 @@ struct parser_event {
     bool finished;
 
     /** lista de eventos: si es diferente de null ocurrieron varios eventos */
-    struct parser_event *next;
+    // struct parser_event *next;
 };
 
 /** describe una transición entre estados  */
@@ -95,6 +95,6 @@ const unsigned * parser_no_classes(void);
 
 void add_finished_event(parser * p);
 
-parser_event * parser_get_event(parser * p);
+parser_event * parser_pop_event(parser * p);
 
 #endif
