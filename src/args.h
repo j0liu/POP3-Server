@@ -7,15 +7,15 @@
 #define MAX_USERS 10
 
 struct users {
-    char *name;
-    char *pass;
+    char* name;
+    char* pass;
 };
 
 typedef struct Pop3Args {
-    unsigned short  pop3_port;
-    char *          maildir_path; 
+    unsigned short pop3_port;
+    char* maildir_path;
 
-    struct users    users[MAX_USERS];
+    struct users users[MAX_USERS];
     size_t quantity_users;
 } Pop3Args;
 
@@ -24,6 +24,6 @@ typedef struct Pop3Args {
  * args con defaults o la seleccion humana. Puede cortar
  * la ejecución.
  */
-void parse_args(const int argc, char **argv, Pop3Args *args);
+void parse_args(const int argc, char** argv, Pop3Args* args);
 
 #endif

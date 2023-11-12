@@ -1,26 +1,26 @@
+#include <errno.h>
+#include <limits.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <limits.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <signal.h>
 
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 
-#include <unistd.h>
 #include "buffer.h"
 #include "netutils.h"
+#include <unistd.h>
 // #include "tests.h"
-#include "pop3_utils.h"
-#include "parser/parser.h"
-#include "socket_data.h"
 #include "client_data.h"
-Pop3Args * pop3args;
+#include "parser/parser.h"
+#include "pop3_utils.h"
+#include "socket_data.h"
+Pop3Args* pop3args;
 
 #define CRLF "\r\n"
 #define OK "+OK"
@@ -45,13 +45,13 @@ Pop3Args * pop3args;
 #define NO_MESSAGE_LIST (ERR " There's no message %d." CRLF)
 #define INVALID_NUMBER_LIST (ERR " Invalid message number: %d" CRLF)
 
-
-static void noop_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+static void noop_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
     socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
 }
 
-
-static void capa_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+static void capa_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
     if (client_data->state == AUTHORIZATION) {
         socket_write(client_data->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1);
         return;
@@ -59,11 +59,12 @@ static void capa_handler(ClientData * client_data, char * commandParameters, uin
     socket_write(client_data->socket_data, CAPA_MSG_TRANSACTION, sizeof CAPA_MSG_TRANSACTION - 1);
 }
 
-static void user_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    for (int i = 0; i < (int) pop3args->quantity_users; i++) {
+static void user_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    for (int i = 0; i < (int)pop3args->quantity_users; i++) {
         // TODO: Validate the comparison to prevent segfaults?
         if (strcmp(pop3args->users[i].name, commandParameters) == 0) {
-            socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1); 
+            socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
             client_data->user = &pop3args->users[i];
             return;
         }
@@ -71,9 +72,10 @@ static void user_handler(ClientData * client_data, char * commandParameters, uin
     socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
 }
 
-static void pass_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
+static void pass_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
     if (client_data->user == NULL) {
-        socket_write(client_data->socket_data, NO_USERNAME_GIVEN, sizeof NO_USERNAME_GIVEN - 1); 
+        socket_write(client_data->socket_data, NO_USERNAME_GIVEN, sizeof NO_USERNAME_GIVEN - 1);
         return;
     }
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
@@ -86,17 +88,17 @@ static void pass_handler(ClientData * client_data, char * commandParameters, uin
     return;
 }
 
-
-static int first_argument_to_int(ClientData * client_data, char * commandParameters)  {
-    char * endptr;
+static int first_argument_to_int(ClientData* client_data, char* commandParameters)
+{
+    char* endptr;
     int num = -1, len;
     if (commandParameters != NULL) {
         num = strtol(commandParameters, &endptr, 10);
         if (num > 0 && num < client_data->mail_count && *endptr == '\0' && endptr != commandParameters)
             return num;
     }
-    char buff[100] = {0}; // TODO: Improve
-    if(num <= 0 || endptr == commandParameters) {
+    char buff[100] = { 0 }; // TODO: Improve
+    if (num <= 0 || endptr == commandParameters) {
         len = sprintf(buff, ERR_INVALID_NUMBER, commandParameters != NULL ? commandParameters : "");
     } else if (*endptr != '\0') {
         len = sprintf(buff, ERR_NOISE, endptr);
@@ -107,53 +109,61 @@ static int first_argument_to_int(ClientData * client_data, char * commandParamet
     return -1;
 }
 
-static void list_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    char buff[100] = {0}; // TODO: Improve
-    while(*commandParameters == ' ') {commandParameters++; parameters_length--;}
-    
+static void list_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    char buff[100] = { 0 }; // TODO: Improve
+    while (*commandParameters == ' ') {
+        commandParameters++;
+        parameters_length--;
+    }
+
     if (parameters_length == 0) {
-        for (int i=0; i < client_data->mail_count; i++) {
-            int len = sprintf(buff, "%d %ld" CRLF, i+1, client_data->mail_info_list[i].size);
+        for (int i = 0; i < client_data->mail_count; i++) {
+            int len = sprintf(buff, "%d %ld" CRLF, i + 1, client_data->mail_info_list[i].size);
             socket_write(client_data->socket_data, buff, len);
         }
         socket_write(client_data->socket_data, TERMINATION, sizeof TERMINATION - 1);
     } else {
         int num = first_argument_to_int(client_data, commandParameters);
         if (num > 0) {
-            int len = sprintf(buff, OK " %d %ld" CRLF, num, client_data->mail_info_list[num-1].size);
-            socket_write(client_data->socket_data, buff, len);   
+            int len = sprintf(buff, OK " %d %ld" CRLF, num, client_data->mail_info_list[num - 1].size);
+            socket_write(client_data->socket_data, buff, len);
         }
     }
 }
 
-static void retr_handler(ClientData * client_data, char * commandParameters, uint8_t parameters_length) {
-    while(*commandParameters == ' ') {commandParameters++; parameters_length--;}
+static void retr_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    while (*commandParameters == ' ') {
+        commandParameters++;
+        parameters_length--;
+    }
     if (parameters_length == 0) {
-       socket_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1); 
-       return;
+        socket_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
+        return;
     }
     int num = first_argument_to_int(client_data, commandParameters);
     if (num > 0) {
-        char initial_message[50] = {0}; 
+        char initial_message[50] = { 0 };
         int len = sprintf(initial_message, OK_OCTETS, client_data->mail_info_list[num].size);
-        socket_write(client_data->socket_data, initial_message, len); 
+        socket_write(client_data->socket_data, initial_message, len);
     }
-
 }
 
 CommandDescription available_commands[] = {
-    {.id = CAPA, .name = "CAPA", .handler = capa_handler, .valid_states = AUTHORIZATION | TRANSACTION },
-    {.id = NOOP, .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
-    {.id = USER, .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
-    {.id = PASS, .name = "PASS", .handler = pass_handler, .valid_states = AUTHORIZATION },
-    {.id = LIST, .name = "LIST", .handler = list_handler, .valid_states = TRANSACTION },
-    {.id = RETR, .name = "RETR", .handler = retr_handler, .valid_states = TRANSACTION },
+    { .id = CAPA, .name = "CAPA", .handler = capa_handler, .valid_states = AUTHORIZATION | TRANSACTION },
+    { .id = NOOP, .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
+    { .id = USER, .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
+    { .id = PASS, .name = "PASS", .handler = pass_handler, .valid_states = AUTHORIZATION },
+    { .id = LIST, .name = "LIST", .handler = list_handler, .valid_states = TRANSACTION },
+    { .id = RETR, .name = "RETR", .handler = retr_handler, .valid_states = TRANSACTION },
 };
 
-static int consume_pop3_buffer(parser * pop3parser, ClientData * client_data) {
-    for (; buffer_can_read(&client_data->socket_data->client_buffer); ) {
+static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
+{
+    for (; buffer_can_read(&client_data->socket_data->client_buffer);) {
         const uint8_t c = socket_data_read(client_data->socket_data);
-        const parser_event * event = parser_feed(pop3parser, c);
+        const parser_event* event = parser_feed(pop3parser, c);
         if (event == NULL)
             return -1;
         if (event->finished)
@@ -163,11 +173,12 @@ static int consume_pop3_buffer(parser * pop3parser, ClientData * client_data) {
     return -1;
 }
 
-static int process_event(parser_event * event, ClientData * client_data) {
-    for (int i = 0; i < (int) N(available_commands); i++) {
+static int process_event(parser_event* event, ClientData* client_data)
+{
+    for (int i = 0; i < (int)N(available_commands); i++) {
         if (strncasecmp(event->command, available_commands[i].name, 4) == 0) {
-            if((client_data->state & available_commands[i].valid_states) == 0) {
-                char initial_message[50] = {0}; 
+            if ((client_data->state & available_commands[i].valid_states) == 0) {
+                char initial_message[50] = { 0 };
                 int len = sprintf(initial_message, UNKNOWN_COMMAND, event->command);
                 socket_write(client_data->socket_data, initial_message, len);
                 return -1;
@@ -178,9 +189,9 @@ static int process_event(parser_event * event, ClientData * client_data) {
         }
     }
 
-    char buff[100] = {0}; // TODO: Improve
+    char buff[100] = { 0 }; // TODO: Improve
     int len = sprintf(buff, UNKNOWN_COMMAND, event->command);
-    socket_write(client_data->socket_data, buff, len); 
+    socket_write(client_data->socket_data, buff, len);
     // TODO: Handle errors?
     return -1;
 }
@@ -192,59 +203,57 @@ static int process_event(parser_event * event, ClientData * client_data) {
  * @param caddr información de la conexiónentrante.
  */
 
-static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
-    SocketData * socket_data = initialize_socket_data(fd);
+static void pop3_handle_connection(const int fd, const struct sockaddr* caddr)
+{
+    SocketData* socket_data = initialize_socket_data(fd);
     socket_write(socket_data, SERVER_READY, sizeof SERVER_READY - 1);
-    ClientData * client_data = initialize_client_data(socket_data);
+    ClientData* client_data = initialize_client_data(socket_data);
 
     extern parser_definition pop3_parser_definition;
-    parser * pop3parser = parser_init(NULL, &pop3_parser_definition);
+    parser* pop3parser = parser_init(NULL, &pop3_parser_definition);
 
-    while(buffer_can_read(&client_data->socket_data->client_buffer) || socket_data_receive(client_data->socket_data) > 0) {
+    while (buffer_can_read(&client_data->socket_data->client_buffer) || socket_data_receive(client_data->socket_data) > 0) {
         if (consume_pop3_buffer(pop3parser, client_data) == 0) {
-            parser_event * event = parser_pop_event(pop3parser);
+            parser_event* event = parser_pop_event(pop3parser);
             if (event != NULL) {
                 process_event(event, client_data);
                 free(event);
             }
         }
-    } 
+    }
     close(fd);
 }
 
 /** rutina de cada hilo worker */
 
-static void * handle_connection_pthread(void *args) {
-  const struct connection *c = args;
-  pthread_detach(pthread_self());
-  pop3_handle_connection(c->fd, (struct sockaddr *)&c->addr);
-  free(args);
-  return 0;
+static void* handle_connection_pthread(void* args)
+{
+    const struct connection* c = args;
+    pthread_detach(pthread_self());
+    pop3_handle_connection(c->fd, (struct sockaddr*)&c->addr);
+    free(args);
+    return 0;
 }
 
-
-int serve_pop3_concurrent_blocking(const int server, Pop3Args * receivedArgs) {
+int serve_pop3_concurrent_blocking(const int server, Pop3Args* receivedArgs)
+{
     pop3args = receivedArgs; // TODO: Improve
 
     // TODO: add something similar to 'done' again
-    for (;;)
-    {
+    for (;;) {
         struct sockaddr_in6 caddr;
         socklen_t caddrlen = sizeof(caddr);
         // Wait for a client to connect
-        const int client = accept(server, (struct sockaddr *)&caddr, &caddrlen);
+        const int client = accept(server, (struct sockaddr*)&caddr, &caddrlen);
         if (client < 0) {
             perror("Unable to accept incoming socket");
-        }
-        else {
+        } else {
             // TODO(juan): limitar la cantidad de hilos concurrentes
-            struct connection *c = malloc(sizeof(struct connection));
+            struct connection* c = malloc(sizeof(struct connection));
             if (c == NULL) {
                 // lo trabajamos iterativamente
-                pop3_handle_connection(client, (struct sockaddr *)&caddr);
-            }
-            else
-            {
+                pop3_handle_connection(client, (struct sockaddr*)&caddr);
+            } else {
                 pthread_t tid;
                 c->fd = client;
                 c->addrlen = caddrlen;
@@ -253,7 +262,7 @@ int serve_pop3_concurrent_blocking(const int server, Pop3Args * receivedArgs) {
                 if (pthread_create(&tid, 0, handle_connection_pthread, c)) {
                     free(c);
                     // lo trabajamos iterativamente
-                    pop3_handle_connection(client, (struct sockaddr *)&caddr);
+                    pop3_handle_connection(client, (struct sockaddr*)&caddr);
                 }
             }
         }

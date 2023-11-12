@@ -1,12 +1,12 @@
 #ifndef POP3_UTILS_H
 #define POP3_UTILS_H
 
-#include <sys/socket.h>
-#include "parser/parser.h"
-#include "client_data.h"
 #include "args.h"
+#include "client_data.h"
+#include "parser/parser.h"
+#include <sys/socket.h>
 
-#define N(x) (sizeof(x)/sizeof((x)[0]))
+#define N(x) (sizeof(x) / sizeof((x)[0]))
 
 typedef enum command_id {
     CAPA,
@@ -26,8 +26,8 @@ typedef enum command_id {
 
 typedef struct CommandDescription {
     command_id id;
-    char * name;
-    void (*handler)(ClientData * client_data, char * commandParameters, uint8_t parameters_length);
+    char* name;
+    void (*handler)(ClientData* client_data, char* commandParameters, uint8_t parameters_length);
     uint8_t valid_states;
 } CommandDescription;
 
@@ -36,12 +36,11 @@ typedef struct CommandDescription {
  * que acepta sockets y los hilos que procesa cada conexión
  */
 struct connection {
-  int fd; 
-  socklen_t addrlen;
-  struct sockaddr_in6 addr;
+    int fd;
+    socklen_t addrlen;
+    struct sockaddr_in6 addr;
 };
 
-int serve_pop3_concurrent_blocking(const int server, Pop3Args * popargs);
-
+int serve_pop3_concurrent_blocking(const int server, Pop3Args* popargs);
 
 #endif
