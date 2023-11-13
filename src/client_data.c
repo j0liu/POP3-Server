@@ -2,6 +2,7 @@
 #include "socket_data.h"
 
 #include <stdlib.h>
+#include <time.h>
 
 ClientData* initialize_client_data(SocketData* socket_data)
 {
@@ -12,6 +13,7 @@ ClientData* initialize_client_data(SocketData* socket_data)
     client_data->mail_info_list = NULL;
     client_data->mail_count = 0;
     client_data->mail_count_not_deleted = 0;
+    client_data->last_activity_time = time(NULL);
     return client_data;
 }
 

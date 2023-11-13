@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <pthread.h>
 #include <signal.h>
@@ -8,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -39,6 +41,8 @@ Pop3Args* pop3args;
 #define DISCONNECTED_FOR_INACTIVITY (ERR " Disconnected for inactivity." CRLF)
 #define ERR_NOISE (ERR " Noise after message number: %s" CRLF)
 #define ERR_INVALID_NUMBER (ERR " Invalid message number: %s" CRLF)
+#define ERR_INACTIVITY_TIMEOUT (ERR " Disconnected for inactivity." CRLF)
+#define ERR_LOCKED_MAILDROP (ERR " Unable to lock maildrop." CRLF)
 #define OK_OCTETS (OK " %ld octets" CRLF)
 #define TERMINATION ("." CRLF)
 // LIST
@@ -52,7 +56,7 @@ Pop3Args* pop3args;
 #define OK_DELE (OK " Marked to be deleted." CRLF)
 #define MESSAGE_IS_DELETED (ERR " Message is deleted." CRLF)
 // QUIT
-#define NOT_REMOVED (ERR " Some deleted messages not removed." CRLF)
+#define NOT_REMOVED (ERR " Some messages may not have been deleted." CRLF)
 #define OK_QUIT (OK " POP3 Party over (%d messages left)" CRLF)
 #define OK_QUIT_EMPTY (OK " POP3 Party over (maildrop empty)" CRLF)
 
@@ -74,10 +78,11 @@ static bool quit_handler(ClientData* client_data, char* commandParameters, uint8
         return true;
     }
 
+    client_data->state = UPDATE;
+
     for (int i = 0; i < client_data->mail_count; i++) {
         if (client_data->mail_info_list[i].deleted) {
             if (remove(client_data->mail_info_list[i].filename) != 0) {
-                printf("Error removing file: %s\n", strerror(errno));
                 socket_write(client_data->socket_data, NOT_REMOVED, sizeof NOT_REMOVED - 1);
                 free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
                 free_client_data(client_data);
@@ -120,9 +125,14 @@ static bool pass_handler(ClientData* client_data, char* commandParameters, uint8
         return false;
     }
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
-        socket_write(client_data->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->state = TRANSACTION;
         client_data->mail_info_list = get_mail_info_list(pop3args->maildir_path, &client_data->mail_count, client_data->user->name);
+        if (client_data->mail_info_list == NULL) {
+            socket_write(client_data->socket_data, ERR_LOCKED_MAILDROP, sizeof ERR_LOCKED_MAILDROP - 1);
+            free_client_data(client_data);
+            return true;
+        }
+        socket_write(client_data->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->mail_count_not_deleted = client_data->mail_count;
         return false;
     }
@@ -337,6 +347,7 @@ static int process_event(parser_event* event, ClientData* client_data)
                 socket_write(client_data->socket_data, initial_message, len);
                 return -1;
             }
+            client_data->last_activity_time = time(NULL);
             bool close_connection = available_commands[i].handler(client_data, event->args, event->args_length);
             if (close_connection)
                 return 1;
@@ -367,17 +378,29 @@ static void pop3_handle_connection(const int fd, const struct sockaddr* caddr)
 
     extern parser_definition pop3_parser_definition;
     parser* pop3parser = parser_init(NULL, &pop3_parser_definition);
+    int result;
 
     while (buffer_can_read(&client_data->socket_data->client_buffer) || socket_data_receive(client_data->socket_data) > 0) {
+        if (difftime(time(NULL), client_data->last_activity_time) > INACTIVITY_TIMEOUT) {
+            socket_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
+            break;
+        }
+
         if (consume_pop3_buffer(pop3parser, client_data) == 0) {
             parser_event* event = parser_pop_event(pop3parser);
             if (event != NULL) {
-                int result = process_event(event, client_data);
+                result = process_event(event, client_data);
                 free(event);
                 if (result == 1)
                     break;
             }
         }
+    }
+    if (result != 1) {
+        if (client_data->state == TRANSACTION) {
+            free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
+        }
+        free_client_data(client_data);
     }
     close(fd);
 }
