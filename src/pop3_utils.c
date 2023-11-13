@@ -230,12 +230,24 @@ static bool retr_handler(ClientData* client_data, char* commandParameters, uint8
         }
 
         char line[1024];
+        char last_char = '\0'; // Variable para almacenar el último carácter leído
         while (fgets(line, sizeof(line), email_file) != NULL) {
+            size_t line_len = strlen(line);
+            if (line_len > 0) {
+                last_char = line[line_len - 1]; // Actualiza el último carácter leído
+            }
+
             // Check if line starts with a period and prepend an additional period
-            if (line[0] == '.' && line[1] == '\r' && line[2] == '\n') {
+            if (line[0] == '.' && (line[1] == '\r' && line[2] == '\n')) {
                 socket_write(client_data->socket_data, ".", 1);
             }
-            socket_write(client_data->socket_data, line, strlen(line));
+            socket_write(client_data->socket_data, line, line_len);
+        }
+
+        // Verifica si el último carácter del archivo es un punto sin \r\n después
+        if (last_char == '.') {
+            // Escribe el punto adicional y \r\n para cumplir con el protocolo POP3
+            socket_write(client_data->socket_data, ".", 1);
         }
 
         // Close the file
