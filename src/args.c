@@ -1,9 +1,11 @@
+#include <dirent.h>
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h> /* LONG_MIN et al */
 #include <stdio.h> /* for printf */
 #include <stdlib.h> /* for exit */
 #include <string.h> /* memset */
+#include <sys/stat.h>
 
 #include "args.h"
 
@@ -52,18 +54,18 @@ static void usage(const char* progName)
     printf("  -d <path>   Set the mail directory path (default: ./Maildir)\n");
 }
 
-void parse_args(const int argc, char** argv, Pop3Args* args)
+void parse_args(const int argc, char** argv, Args* args)
 {
-    memset(args, 0, sizeof(*args)); // sobre todo para setear en null los punteros de users
+    memset(args, 0, sizeof(*args));
 
     args->maildir_path = "./Maildir";
-    args->pop3_port = 110;
-    // TODO: Default users?
+    args->pop3_port = 110; // Default POP3 port
+    args->dajt_port = 6969; // Default DAJT port
 
     int c;
     args->quantity_users = 0;
 
-    while ((c = getopt(argc, argv, "hp:u:vd:")) != -1) {
+    while ((c = getopt(argc, argv, "hp:d:u:vP:")) != -1) {
         switch (c) {
         case 'h':
             usage(argv[0]);
@@ -71,6 +73,9 @@ void parse_args(const int argc, char** argv, Pop3Args* args)
             break;
         case 'p':
             args->pop3_port = port(optarg);
+            break;
+        case 'P':
+            args->dajt_port = port(optarg);
             break;
         case 'u':
             if (args->quantity_users >= MAX_USERS) {
@@ -85,8 +90,12 @@ void parse_args(const int argc, char** argv, Pop3Args* args)
             exit(0);
             break;
         case 'd':
-            // TODO: Properly validate the path
             args->maildir_path = optarg;
+            struct stat statbuf;
+            if (stat(args->maildir_path, &statbuf) != 0 || !S_ISDIR(statbuf.st_mode)) {
+                fprintf(stderr, "Invalid maildir path: %s\n", args->maildir_path);
+                exit(1);
+            }
             break;
         default:
             fprintf(stderr, "Unknown argument %c.\n", c);

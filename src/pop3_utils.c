@@ -23,7 +23,7 @@
 #include "parser/parser.h"
 #include "pop3_utils.h"
 #include "socket_data.h"
-Pop3Args* pop3args;
+Args* args;
 
 #define CRLF "\r\n"
 #define OK "+OK"
@@ -107,10 +107,10 @@ static bool quit_handler(ClientData* client_data, char* commandParameters, uint8
 
 static bool user_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
-    for (int i = 0; i < (int)pop3args->quantity_users; i++) {
-        if (strncmp(pop3args->users[i].name, commandParameters, parameters_length) == 0 && pop3args->users[i].name[parameters_length] == '\0') {
+    for (int i = 0; i < (int)args->quantity_users; i++) {
+        if (strncmp(args->users[i].name, commandParameters, parameters_length) == 0 && args->users[i].name[parameters_length] == '\0') {
             socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
-            client_data->user = &pop3args->users[i];
+            client_data->user = &args->users[i];
             return false;
         }
     }
@@ -126,7 +126,7 @@ static bool pass_handler(ClientData* client_data, char* commandParameters, uint8
     }
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
         client_data->state = TRANSACTION;
-        client_data->mail_info_list = get_mail_info_list(pop3args->maildir_path, &client_data->mail_count, client_data->user->name);
+        client_data->mail_info_list = get_mail_info_list(args->maildir_path, &client_data->mail_count, client_data->user->name);
         if (client_data->mail_info_list == NULL) {
             socket_write(client_data->socket_data, ERR_LOCKED_MAILDROP, sizeof ERR_LOCKED_MAILDROP - 1);
             free_client_data(client_data);
@@ -312,7 +312,7 @@ static bool rset_handler(ClientData* client_data, char* commandParameters, uint8
 
 CommandDescription available_commands[] = {
     { .id = CAPA, .name = "CAPA", .handler = capa_handler, .valid_states = AUTHORIZATION | TRANSACTION },
-    { .id = QUIT, .name = "QUIT", .handler = quit_handler, .valid_states = AUTHORIZATION | TRANSACTION | UPDATE },
+    { .id = QUIT, .name = "QUIT", .handler = quit_handler, .valid_states = AUTHORIZATION | TRANSACTION },
     { .id = USER, .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
     { .id = PASS, .name = "PASS", .handler = pass_handler, .valid_states = AUTHORIZATION },
     { .id = STAT, .name = "STAT", .handler = stat_handler, .valid_states = TRANSACTION },
@@ -416,9 +416,9 @@ static void* handle_connection_pthread(void* args)
     return 0;
 }
 
-int serve_pop3_concurrent_blocking(const int server, Pop3Args* receivedArgs)
+int serve_pop3_concurrent_blocking(const int server, Args* receivedArgs)
 {
-    pop3args = receivedArgs; // TODO: Improve
+    args = receivedArgs; // TODO: Improve
 
     // TODO: add something similar to 'done' again
     for (;;) {

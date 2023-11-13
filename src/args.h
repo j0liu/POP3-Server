@@ -11,19 +11,19 @@ struct users {
     char* pass;
 };
 
-typedef struct Pop3Args {
+typedef struct Args {
     unsigned short pop3_port;
+    unsigned short dajt_port;
     char* maildir_path;
-
     struct users users[MAX_USERS];
     size_t quantity_users;
-} Pop3Args;
+} Args;
 
 /**
  * Interpreta la linea de comandos (argc, argv) llenando
  * args con defaults o la seleccion humana. Puede cortar
  * la ejecución.
  */
-void parse_args(const int argc, char** argv, Pop3Args* args);
+void parse_args(const int argc, char** argv, Args* args);
 
 #endif

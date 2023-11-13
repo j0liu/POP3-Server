@@ -41,6 +41,6 @@ struct connection {
     struct sockaddr_in6 addr;
 };
 
-int serve_pop3_concurrent_blocking(const int server, Pop3Args* popargs);
+int serve_pop3_concurrent_blocking(const int server, Args* args);
 
 #endif

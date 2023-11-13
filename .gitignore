@@ -1,7 +1,7 @@
 patchs
 *.svg
 *.o
-pop3d
+server
 .vscode
 pop3d.dSYM/Contents/Resources/Relocations/aarch64/pop3d.yml
 pop3d.dSYM/Contents/Info.plist

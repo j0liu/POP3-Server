@@ -2,14 +2,14 @@ CFLAGS = -std=c11 -pedantic -pedantic-errors -g -Wall -Werror -Wextra -Wno-unuse
 OBJS = src/*.o src/parser/*.o
 SOURCES = src/*.c src/parser/*.c
 LIBS = -l pthread
-TARGET = pop3d
+TARGET = server
 
 COMPILER = ${CC}
 
-all: pop3d
+all: server
 
 clean:
 	rm -f $(OBJS) $(TARGET)
 
-pop3d:
+server:
 	$(COMPILER) $(CFLAGS) -o $(TARGET) $(SOURCES) $(LIBS)
