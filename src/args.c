@@ -41,19 +41,15 @@ static void version(void)
                     "Todos los derechos reservados bajo pena de muerte\n");
 }
 
-static void usage(const char* progname)
+static void usage(const char* progName)
 {
-    fprintf(stderr,
-        "Usage: %s [OPTION]...\n"
-        "\n"
-        "   -h               Imprime la ayuda y termina.\n"
-        "   -p <POP3 port>   Puerto entrante conexiones POP3.\n"
-        "   -u <name>:<pass> Usuario y contraseña de usuario. Hasta 10.\n"
-        "   -v               Imprime información sobre la versión versión y termina.\n"
-        "   -d <path>        Directorio donde se encuentran los mails.\n"
-        "\n",
-        progname);
-    exit(1);
+    printf("Usage: %s [options]\n", progName);
+    printf("Options:\n");
+    printf("  -h          Show this help message\n");
+    printf("  -v          Display version information\n");
+    printf("  -p <port>   Set the POP3 port (default: 110)\n");
+    printf("  -u <user>   Add a user in the format user:pass\n");
+    printf("  -d <path>   Set the mail directory path (default: ./Maildir)\n");
 }
 
 void parse_args(const int argc, char** argv, Pop3Args* args)
@@ -67,11 +63,7 @@ void parse_args(const int argc, char** argv, Pop3Args* args)
     int c;
     args->quantity_users = 0;
 
-    while (true) {
-        c = getopt(argc, argv, "hp:u:vd:");
-        if (c == -1)
-            break;
-
+    while ((c = getopt(argc, argv, "hp:u:vd:")) != -1) {
         switch (c) {
         case 'h':
             usage(argv[0]);
@@ -82,12 +74,11 @@ void parse_args(const int argc, char** argv, Pop3Args* args)
             break;
         case 'u':
             if (args->quantity_users >= MAX_USERS) {
-                fprintf(stderr, "maximum number of command line users reached: %d.\n", MAX_USERS);
+                fprintf(stderr, "Maximum number of command line users reached: %d.\n", MAX_USERS);
                 exit(1);
-            } else {
-                user(optarg, &args->users[args->quantity_users]);
-                args->quantity_users++;
             }
+            user(optarg, &args->users[args->quantity_users]);
+            args->quantity_users++;
             break;
         case 'v':
             version();
@@ -98,12 +89,18 @@ void parse_args(const int argc, char** argv, Pop3Args* args)
             args->maildir_path = optarg;
             break;
         default:
-            fprintf(stderr, "unknown argument %d.\n", c);
+            fprintf(stderr, "Unknown argument %c.\n", c);
             exit(1);
         }
     }
+
+    if (args->quantity_users == 0) {
+        fprintf(stderr, "At least one user must be specified.\n");
+        exit(1);
+    }
+
     if (optind < argc) {
-        fprintf(stderr, "argument not accepted: ");
+        fprintf(stderr, "Non-option argument(s) not accepted: ");
         while (optind < argc) {
             fprintf(stderr, "%s ", argv[optind++]);
         }

@@ -10,6 +10,6 @@ typedef struct MailInfo {
     size_t size;
 } MailInfo;
 
-MailInfo* get_mail_info_list(const char* directory_path, int* size);
+MailInfo* get_mail_info_list(const char* directory_path, int* size, const char* username);
 
 #endif

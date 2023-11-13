@@ -50,7 +50,7 @@ int main(const int argc, char** argv)
 
     const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (server < 0) {
-        err_msg = "unable to create socket";
+        err_msg = "Unable to create socket";
         goto finally;
     }
 
@@ -60,12 +60,12 @@ int main(const int argc, char** argv)
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int) { 1 }, sizeof(int));
 
     if (bind(server, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        err_msg = "unable to bind socket";
+        err_msg = "Unable to bind socket";
         goto finally;
     }
 
     if (listen(server, 20) < 0) {
-        err_msg = "unable to listen";
+        err_msg = "Unable to listen";
         goto finally;
     }
 

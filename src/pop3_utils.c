@@ -62,8 +62,7 @@ static void capa_handler(ClientData* client_data, char* commandParameters, uint8
 static void user_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     for (int i = 0; i < (int)pop3args->quantity_users; i++) {
-        // TODO: Validate the comparison to prevent segfaults?
-        if (strcmp(pop3args->users[i].name, commandParameters) == 0) {
+        if (strncmp(pop3args->users[i].name, commandParameters, parameters_length) == 0 && pop3args->users[i].name[parameters_length] == '\0') {
             socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
             client_data->user = &pop3args->users[i];
             return;
@@ -81,7 +80,7 @@ static void pass_handler(ClientData* client_data, char* commandParameters, uint8
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
         socket_write(client_data->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->state = TRANSACTION;
-        client_data->mail_info_list = get_mail_info_list(pop3args->maildir_path, &client_data->mail_count);
+        client_data->mail_info_list = get_mail_info_list(pop3args->maildir_path, &client_data->mail_count, client_data->user->name);
         return;
     }
     socket_write(client_data->socket_data, AUTH_FAILED, sizeof AUTH_FAILED - 1);
