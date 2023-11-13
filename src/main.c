@@ -61,7 +61,12 @@ int main(const int argc, char** argv)
     fprintf(stdout, "Listening on TCP port %d\n", args.pop3_port);
 
     if (setsockopt(server_pop3, IPPROTO_IPV6, IPV6_V6ONLY, (void*)&no, sizeof(no)) < 0) {
-        err_msg = "Unable to bin POP3 socket to IPv6 and IPv4";
+        err_msg = "Set POP3 socket to IPv6 and IPv4 failed";
+        goto finally;
+    }
+
+    if (bind(server_pop3, (struct sockaddr*)&addr_pop3, sizeof(addr_pop3)) < 0) {
+        err_msg = "Unable to bind POP3 socket";
         goto finally;
     }
 
@@ -86,7 +91,12 @@ int main(const int argc, char** argv)
     fprintf(stdout, "Listening on DAJT port %d\n", args.dajt_port);
 
     if (setsockopt(server_dajt, IPPROTO_IPV6, IPV6_V6ONLY, (const void*)&no, sizeof(no)) < 0) {
-        err_msg = "Unable to bind DAJT socket to IPv6 and IPv4";
+        err_msg = "Set DAJT socket to IPv6 and IPv4 failed";
+        goto finally;
+    }
+
+    if (bind(server_dajt, (struct sockaddr*)&addr_dajt, sizeof(addr_dajt)) < 0) {
+        err_msg = "Unable to bind DAJT socket";
         goto finally;
     }
 
