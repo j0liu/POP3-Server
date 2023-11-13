@@ -85,7 +85,7 @@ int main(const int argc, char** argv)
 
     fprintf(stdout, "Listening on DAJT port %d\n", args.dajt_port);
 
-    if (setsockopt(server_dajt, IPPROTO_IPV6, IPV6_V6ONLY, (void*)&no, sizeof(no)) < 0) {
+    if (setsockopt(server_dajt, IPPROTO_IPV6, IPV6_V6ONLY, (const void*)&no, sizeof(no)) < 0) {
         err_msg = "Unable to bind DAJT socket to IPv6 and IPv4";
         goto finally;
     }

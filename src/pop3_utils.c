@@ -370,7 +370,7 @@ static int process_event(parser_event* event, ClientData* client_data)
  * @param caddr información de la conexiónentrante.
  */
 
-static void pop3_handle_connection(const int fd, const struct sockaddr* caddr)
+static void pop3_handle_connection(const int fd, const struct sockaddr_in6* caddr)
 {
     SocketData* socket_data = initialize_socket_data(fd);
     socket_write(socket_data, SERVER_READY, sizeof SERVER_READY - 1);
@@ -411,7 +411,7 @@ static void* handle_connection_pthread(void* args)
 {
     const struct connection* c = args;
     pthread_detach(pthread_self());
-    pop3_handle_connection(c->fd, (struct sockaddr*)&c->addr);
+    pop3_handle_connection(c->fd, (struct sockaddr_in6*)&c->addr);
     free(args);
     return 0;
 }
@@ -433,7 +433,7 @@ int serve_pop3_concurrent_blocking(const int server, Args* receivedArgs)
             struct connection* c = malloc(sizeof(struct connection));
             if (c == NULL) {
                 // lo trabajamos iterativamente
-                pop3_handle_connection(client, (struct sockaddr*)&caddr);
+                pop3_handle_connection(client, (struct sockaddr_in6*)&caddr);
             } else {
                 pthread_t tid;
                 c->fd = client;
@@ -443,7 +443,7 @@ int serve_pop3_concurrent_blocking(const int server, Args* receivedArgs)
                 if (pthread_create(&tid, 0, handle_connection_pthread, c)) {
                     free(c);
                     // lo trabajamos iterativamente
-                    pop3_handle_connection(client, (struct sockaddr*)&caddr);
+                    pop3_handle_connection(client, (struct sockaddr_in6*)&caddr);
                 }
             }
         }
