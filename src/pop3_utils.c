@@ -44,6 +44,9 @@ Pop3Args* pop3args;
 #define OK_LIST (OK " %d messages:" CRLF)
 #define NO_MESSAGE_LIST (ERR " There's no message %d." CRLF)
 #define INVALID_NUMBER_LIST (ERR " Invalid message number: %d" CRLF)
+// RETR
+#define NO_SUCH_MESSAGE (ERR " No such message" CRLF)
+#define RETR_TERMINATION (CRLF "." CRLF)
 
 static void noop_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
@@ -93,8 +96,9 @@ static int first_argument_to_int(ClientData* client_data, char* commandParameter
     int num = -1, len;
     if (commandParameters != NULL) {
         num = strtol(commandParameters, &endptr, 10);
-        if (num > 0 && num < client_data->mail_count && *endptr == '\0' && endptr != commandParameters)
+        if (num > 0 && num <= client_data->mail_count && *endptr == '\0' && endptr != commandParameters) {
             return num;
+        }
     }
     char buff[100] = { 0 }; // TODO: Improve
     if (num <= 0 || endptr == commandParameters) {
@@ -137,15 +141,40 @@ static void retr_handler(ClientData* client_data, char* commandParameters, uint8
         commandParameters++;
         parameters_length--;
     }
+
     if (parameters_length == 0) {
         socket_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
         return;
     }
+
     int num = first_argument_to_int(client_data, commandParameters);
     if (num > 0) {
         char initial_message[50] = { 0 };
-        int len = sprintf(initial_message, OK_OCTETS, client_data->mail_info_list[num].size);
+        int len = sprintf(initial_message, OK_OCTETS, client_data->mail_info_list[num - 1].size);
         socket_write(client_data->socket_data, initial_message, len);
+
+        // Open the email file
+        FILE* email_file = fopen(client_data->mail_info_list[num - 1].filename, "r");
+        if (email_file == NULL) {
+            // Handle file open error
+            socket_write(client_data->socket_data, NO_SUCH_MESSAGE, sizeof NO_SUCH_MESSAGE - 1);
+            return;
+        }
+
+        char line[1024];
+        while (fgets(line, sizeof(line), email_file) != NULL) {
+            // Check if line starts with a period and prepend an additional period
+            if (line[0] == '.' && line[1] == '\r' && line[2] == '\n') {
+                socket_write(client_data->socket_data, ".", 1);
+            }
+            socket_write(client_data->socket_data, line, strlen(line));
+        }
+
+        // Close the file
+        fclose(email_file);
+
+        // Send terminating sequence
+        socket_write(client_data->socket_data, RETR_TERMINATION, sizeof RETR_TERMINATION - 1);
     }
 }
 
