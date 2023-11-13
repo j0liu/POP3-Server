@@ -27,7 +27,7 @@ typedef enum command_id {
 typedef struct CommandDescription {
     command_id id;
     char* name;
-    void (*handler)(ClientData* client_data, char* commandParameters, uint8_t parameters_length);
+    bool (*handler)(ClientData* client_data, char* commandParameters, uint8_t parameters_length);
     uint8_t valid_states;
 } CommandDescription;
 

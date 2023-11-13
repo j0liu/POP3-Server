@@ -98,6 +98,7 @@ MailInfo* get_mail_info_list(const char* directory_path, int* size, const char* 
                 mail_info_list[index].filename = malloc(strlen(filepath) + 1);
                 strcpy(mail_info_list[index].filename, filepath);
                 mail_info_list[index].size = file_stat.st_size;
+                mail_info_list[index].deleted = false;
                 index++;
             }
         }

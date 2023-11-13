@@ -14,7 +14,10 @@ typedef struct ClientData {
     struct users* user;
     MailInfo* mail_info_list;
     int mail_count;
+    int mail_count_not_deleted;
 } ClientData;
 
 ClientData* initialize_client_data(SocketData* socket_data);
+void free_client_data(ClientData* client_data);
+
 #endif

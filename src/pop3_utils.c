@@ -17,6 +17,7 @@
 #include <unistd.h>
 // #include "tests.h"
 #include "client_data.h"
+#include "mail.h"
 #include "parser/parser.h"
 #include "pop3_utils.h"
 #include "socket_data.h"
@@ -47,47 +48,86 @@ Pop3Args* pop3args;
 // RETR
 #define NO_SUCH_MESSAGE (ERR " No such message" CRLF)
 #define RETR_TERMINATION (CRLF "." CRLF)
+// DELE
+#define OK_DELE (OK " Marked to be deleted." CRLF)
+#define MESSAGE_IS_DELETED (ERR " Message is deleted." CRLF)
+// QUIT
+#define NOT_REMOVED (ERR " Some deleted messages not removed." CRLF)
+#define OK_QUIT (OK " POP3 Party over (%d messages left)" CRLF)
+#define OK_QUIT_EMPTY (OK " POP3 Party over (maildrop empty)" CRLF)
 
-static void noop_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
-{
-    socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
-}
-
-static void capa_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static bool capa_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     if (client_data->state == AUTHORIZATION) {
         socket_write(client_data->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1);
-        return;
+        return false;
     }
     socket_write(client_data->socket_data, CAPA_MSG_TRANSACTION, sizeof CAPA_MSG_TRANSACTION - 1);
+    return false;
 }
 
-static void user_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static bool quit_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    if (client_data->state == AUTHORIZATION) {
+        socket_write(client_data->socket_data, LOGGING_OUT, sizeof LOGGING_OUT - 1);
+        free_client_data(client_data);
+        return true;
+    }
+
+    for (int i = 0; i < client_data->mail_count; i++) {
+        if (client_data->mail_info_list[i].deleted) {
+            if (remove(client_data->mail_info_list[i].filename) != 0) {
+                printf("Error removing file: %s\n", strerror(errno));
+                socket_write(client_data->socket_data, NOT_REMOVED, sizeof NOT_REMOVED - 1);
+                free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
+                free_client_data(client_data);
+                return true;
+            }
+        }
+    }
+
+    if (client_data->mail_count_not_deleted == 0) {
+        socket_write(client_data->socket_data, OK_QUIT_EMPTY, sizeof OK_QUIT_EMPTY - 1);
+    } else {
+        char buff[100] = { 0 }; // TODO: Improve
+        int len = sprintf(buff, OK_QUIT, client_data->mail_count_not_deleted);
+        socket_write(client_data->socket_data, buff, len);
+    }
+
+    free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
+    free_client_data(client_data);
+
+    return true;
+}
+
+static bool user_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     for (int i = 0; i < (int)pop3args->quantity_users; i++) {
         if (strncmp(pop3args->users[i].name, commandParameters, parameters_length) == 0 && pop3args->users[i].name[parameters_length] == '\0') {
             socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
             client_data->user = &pop3args->users[i];
-            return;
+            return false;
         }
     }
     socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
+    return false;
 }
 
-static void pass_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static bool pass_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     if (client_data->user == NULL) {
         socket_write(client_data->socket_data, NO_USERNAME_GIVEN, sizeof NO_USERNAME_GIVEN - 1);
-        return;
+        return false;
     }
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
         socket_write(client_data->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->state = TRANSACTION;
         client_data->mail_info_list = get_mail_info_list(pop3args->maildir_path, &client_data->mail_count, client_data->user->name);
-        return;
+        client_data->mail_count_not_deleted = client_data->mail_count;
+        return false;
     }
     socket_write(client_data->socket_data, AUTH_FAILED, sizeof AUTH_FAILED - 1);
-    return;
+    return false;
 }
 
 static int first_argument_to_int(ClientData* client_data, char* commandParameters)
@@ -112,7 +152,24 @@ static int first_argument_to_int(ClientData* client_data, char* commandParameter
     return -1;
 }
 
-static void list_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static bool stat_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    int count = 0;
+    size_t size = 0;
+    for (int i = 0; i < client_data->mail_count; i++) {
+        if (!client_data->mail_info_list[i].deleted) {
+            count++;
+            size += client_data->mail_info_list[i].size;
+        }
+    }
+    char buff[100] = { 0 }; // TODO: Improve
+    int len = sprintf(buff, OK " %d %ld" CRLF, count, size);
+    socket_write(client_data->socket_data, buff, len);
+
+    return false;
+}
+
+static bool list_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     char buff[100] = { 0 }; // TODO: Improve
     while (*commandParameters == ' ') {
@@ -121,9 +178,14 @@ static void list_handler(ClientData* client_data, char* commandParameters, uint8
     }
 
     if (parameters_length == 0) {
+        int len = sprintf(buff, OK_LIST, client_data->mail_count_not_deleted);
+        socket_write(client_data->socket_data, buff, len);
+
         for (int i = 0; i < client_data->mail_count; i++) {
-            int len = sprintf(buff, "%d %ld" CRLF, i + 1, client_data->mail_info_list[i].size);
-            socket_write(client_data->socket_data, buff, len);
+            if (!client_data->mail_info_list[i].deleted) {
+                int len = sprintf(buff, "%d %ld" CRLF, i + 1, client_data->mail_info_list[i].size);
+                socket_write(client_data->socket_data, buff, len);
+            }
         }
         socket_write(client_data->socket_data, TERMINATION, sizeof TERMINATION - 1);
     } else {
@@ -133,9 +195,10 @@ static void list_handler(ClientData* client_data, char* commandParameters, uint8
             socket_write(client_data->socket_data, buff, len);
         }
     }
+    return false;
 }
 
-static void retr_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static bool retr_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     while (*commandParameters == ' ') {
         commandParameters++;
@@ -144,11 +207,16 @@ static void retr_handler(ClientData* client_data, char* commandParameters, uint8
 
     if (parameters_length == 0) {
         socket_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
-        return;
+        return false;
     }
 
     int num = first_argument_to_int(client_data, commandParameters);
     if (num > 0) {
+        if (client_data->mail_info_list[num - 1].deleted) {
+            socket_write(client_data->socket_data, MESSAGE_IS_DELETED, sizeof MESSAGE_IS_DELETED - 1);
+            return false;
+        }
+
         char initial_message[50] = { 0 };
         int len = sprintf(initial_message, OK_OCTETS, client_data->mail_info_list[num - 1].size);
         socket_write(client_data->socket_data, initial_message, len);
@@ -158,7 +226,7 @@ static void retr_handler(ClientData* client_data, char* commandParameters, uint8
         if (email_file == NULL) {
             // Handle file open error
             socket_write(client_data->socket_data, NO_SUCH_MESSAGE, sizeof NO_SUCH_MESSAGE - 1);
-            return;
+            return false;
         }
 
         char line[1024];
@@ -176,15 +244,61 @@ static void retr_handler(ClientData* client_data, char* commandParameters, uint8
         // Send terminating sequence
         socket_write(client_data->socket_data, RETR_TERMINATION, sizeof RETR_TERMINATION - 1);
     }
+    return false;
+}
+
+static bool dele_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    while (*commandParameters == ' ') {
+        commandParameters++;
+        parameters_length--;
+    }
+
+    if (parameters_length == 0) {
+        socket_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
+        return false;
+    }
+
+    int num = first_argument_to_int(client_data, commandParameters);
+    if (num > 0) {
+        if (client_data->mail_info_list[num - 1].deleted) {
+            socket_write(client_data->socket_data, MESSAGE_IS_DELETED, sizeof MESSAGE_IS_DELETED - 1);
+        } else {
+            client_data->mail_info_list[num - 1].deleted = true;
+            client_data->mail_count_not_deleted--;
+            socket_write(client_data->socket_data, OK_DELE, sizeof OK_DELE - 1);
+        }
+    }
+    return false;
+}
+
+static bool noop_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
+    return false;
+}
+
+static bool rset_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+{
+    for (int i = 0; i < client_data->mail_count; i++) {
+        client_data->mail_info_list[i].deleted = false;
+    }
+    client_data->mail_count_not_deleted = client_data->mail_count;
+    socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
+    return false;
 }
 
 CommandDescription available_commands[] = {
     { .id = CAPA, .name = "CAPA", .handler = capa_handler, .valid_states = AUTHORIZATION | TRANSACTION },
-    { .id = NOOP, .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
+    { .id = QUIT, .name = "QUIT", .handler = quit_handler, .valid_states = AUTHORIZATION | TRANSACTION | UPDATE },
     { .id = USER, .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
     { .id = PASS, .name = "PASS", .handler = pass_handler, .valid_states = AUTHORIZATION },
+    { .id = STAT, .name = "STAT", .handler = stat_handler, .valid_states = TRANSACTION },
     { .id = LIST, .name = "LIST", .handler = list_handler, .valid_states = TRANSACTION },
     { .id = RETR, .name = "RETR", .handler = retr_handler, .valid_states = TRANSACTION },
+    { .id = DELE, .name = "DELE", .handler = dele_handler, .valid_states = TRANSACTION },
+    { .id = NOOP, .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
+    { .id = RSET, .name = "RSET", .handler = rset_handler, .valid_states = TRANSACTION },
 };
 
 static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
@@ -211,7 +325,9 @@ static int process_event(parser_event* event, ClientData* client_data)
                 socket_write(client_data->socket_data, initial_message, len);
                 return -1;
             }
-            available_commands[i].handler(client_data, event->args, event->args_length);
+            bool close_connection = available_commands[i].handler(client_data, event->args, event->args_length);
+            if (close_connection)
+                return 1;
 
             return 0;
         }
@@ -244,8 +360,10 @@ static void pop3_handle_connection(const int fd, const struct sockaddr* caddr)
         if (consume_pop3_buffer(pop3parser, client_data) == 0) {
             parser_event* event = parser_pop_event(pop3parser);
             if (event != NULL) {
-                process_event(event, client_data);
+                int result = process_event(event, client_data);
                 free(event);
+                if (result == 1)
+                    break;
             }
         }
     }
