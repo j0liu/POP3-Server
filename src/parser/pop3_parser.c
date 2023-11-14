@@ -1,13 +1,13 @@
-#include <stdbool.h>
 #include "parser.h"
 #include <ctype.h>
+#include <stdbool.h>
 
-#define N(x) (sizeof(x)/sizeof((x)[0]))
+#define N(x) (sizeof(x) / sizeof((x)[0]))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
-static void cmd_action(parser_event *ret, const uint8_t c);
-static void arg_action(parser_event *ret, const uint8_t c);
-static void finish_action(parser_event *ret, const uint8_t c);
-
+static void cmd_action(parser_event* ret, const uint8_t c);
+static void arg_action(parser_event* ret, const uint8_t c);
+static void finish_action(parser_event* ret, const uint8_t c);
 
 enum pop3_states {
     START,
@@ -20,54 +20,52 @@ enum pop3_states {
     ERROR
 };
 
-
-static const struct parser_state_transition ST_START [] = {
-    { .when = ' ',      .dest = ERROR,                 .act = NULL},
-    { .when = '\r',     .dest = ERROR,                 .act = NULL}, 
-    { .when = ANY,      .dest = FIRST_LETTER_CMD,      .act = cmd_action}
+static const struct parser_state_transition ST_START[] = {
+    { .when = ' ', .dest = ERROR, .act = NULL },
+    { .when = '\r', .dest = ENDING, .act = NULL },
+    { .when = ANY, .dest = FIRST_LETTER_CMD, .act = cmd_action }
 };
 
-static const struct parser_state_transition ST_FIRST_L [] = {
-    { .when = ' ',      .dest = ERROR,                  .act = NULL  },
-    { .when = '\r',     .dest = ERROR,                  .act = NULL  },
-    { .when = ANY,      .dest = SECOND_LETTER_CMD,      .act = cmd_action  }
+static const struct parser_state_transition ST_FIRST_L[] = {
+    { .when = ' ', .dest = ERROR, .act = NULL },
+    { .when = '\r', .dest = ENDING, .act = NULL },
+    { .when = ANY, .dest = SECOND_LETTER_CMD, .act = cmd_action }
 };
 
-static const struct parser_state_transition ST_SECOND_L [] = {
-    { .when = ' ',      .dest = ERROR,                 .act = NULL },
-    { .when = '\r',     .dest = ERROR,                 .act = NULL },
-    { .when = ANY,      .dest = THIRD_LETTER_CMD,      .act = cmd_action }
+static const struct parser_state_transition ST_SECOND_L[] = {
+    { .when = ' ', .dest = ERROR, .act = NULL },
+    { .when = '\r', .dest = ENDING, .act = NULL },
+    { .when = ANY, .dest = THIRD_LETTER_CMD, .act = cmd_action }
 };
 
-static const struct parser_state_transition ST_THIRD_L [] = {
-    { .when = ' ',      .dest = ARGS,                   .act = NULL       },
-    { .when = '\r',     .dest = ENDING,                 .act = NULL       },
-    { .when = ANY,      .dest = FOURTH_LETTER_CMD,      .act = cmd_action }
+static const struct parser_state_transition ST_THIRD_L[] = {
+    { .when = ' ', .dest = ERROR, .act = NULL },
+    { .when = '\r', .dest = ENDING, .act = NULL },
+    { .when = ANY, .dest = FOURTH_LETTER_CMD, .act = cmd_action }
 };
 
-static const struct parser_state_transition ST_FOURTH_L [] = {
-    { .when = ' ',      .dest = ARGS,       .act = NULL },
-    { .when = '\r',     .dest = ENDING,     .act = NULL },
-    { .when = ANY,      .dest = ERROR,      .act = NULL }
+static const struct parser_state_transition ST_FOURTH_L[] = {
+    { .when = ' ', .dest = ARGS, .act = NULL },
+    { .when = '\r', .dest = ENDING, .act = NULL },
+    { .when = ANY, .dest = ERROR, .act = cmd_action }
 };
 
-static const struct parser_state_transition ST_ARGS [] = {
-    { .when = '\r',     .dest = ENDING,     .act = NULL       },
-    { .when = ANY,      .dest = ARGS,       .act = arg_action }
+static const struct parser_state_transition ST_ARGS[] = {
+    { .when = '\r', .dest = ENDING, .act = NULL },
+    { .when = ANY, .dest = ARGS, .act = arg_action }
 };
 
-static const struct parser_state_transition ST_ENDING [] = {
-    { .when = '\n',     .dest = START,      .act = finish_action },
-    { .when = '\r',     .dest = ENDING,     .act = NULL          }, // TODO: Probar
-    { .when = ANY,      .dest = ERROR,      .act = NULL    }
+static const struct parser_state_transition ST_ENDING[] = {
+    { .when = '\n', .dest = START, .act = finish_action },
+    { .when = ANY, .dest = ERROR, .act = NULL }
 };
 
-static const struct parser_state_transition ST_ERROR [] = {
-    { .when = '\r',     .dest = ENDING,      .act = finish_action }, //TODO arreglar xd
-    { .when = ANY,      .dest = ERROR,       .act = NULL }
+static const struct parser_state_transition ST_ERROR[] = {
+    { .when = '\r', .dest = ENDING, .act = NULL },
+    { .when = ANY, .dest = ERROR, .act = NULL },
 };
 
-static const struct parser_state_transition *states [] = {
+static const struct parser_state_transition* states[] = {
     ST_START,
     ST_FIRST_L,
     ST_SECOND_L,
@@ -78,7 +76,7 @@ static const struct parser_state_transition *states [] = {
     ST_ERROR
 };
 
-static const size_t states_n [] = {
+static const size_t states_n[] = {
     N(ST_START),
     N(ST_FIRST_L),
     N(ST_SECOND_L),
@@ -93,26 +91,26 @@ const parser_definition pop3_parser_definition = {
     .states_count = N(states),
     .states = states,
     .states_n = states_n,
-    .start_state = START    
+    .start_state = START
 };
 
-
-static void cmd_action(parser_event *event, const uint8_t c) {
-    if (event->command_length < COMMAND_LENGTH) {
+static void cmd_action(parser_event* event, const uint8_t c)
+{
+    if (event->command_length < COMMAND_LENGTH + 1) {
         event->command[event->command_length++] = c;
     }
-    // TODO: Handle errors
 }
 
-static void arg_action(parser_event *event, const uint8_t c) {
-    if (event->args_length < ARGS_LENGTH) {
+static void arg_action(parser_event* event, const uint8_t c)
+{
+    if (event->args_length < ARGS_LENGTH + 1) {
         event->args[event->args_length++] = c;
     }
-    // TODO: Handle errors
 }
 
-static void finish_action(parser_event *event, const uint8_t c) {
+static void finish_action(parser_event* event, const uint8_t c)
+{
     event->command[event->command_length] = '\0';
     event->args[event->args_length] = '\0';
     event->finished = true;
-}
+}   

@@ -24,7 +24,8 @@
 // #include "tests.h"
 #include "args.h"
 #include "parser/parser.h"
-#include "pop3_utils.h"
+#include "pop3.h"
+#include "protocols.h"
 #include "socket_data.h"
 
 #define MAX_PENDING_CONNECTIONS 500
