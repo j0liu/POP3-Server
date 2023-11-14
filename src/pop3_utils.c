@@ -57,6 +57,7 @@ Args* args;
 #define MESSAGE_IS_DELETED (ERR " Message is deleted." CRLF)
 // QUIT
 #define NOT_REMOVED (ERR " Some messages may not have been deleted." CRLF)
+#define OK_QUIT_NO_AUTH (OK " POP3 Party over" CRLF)
 #define OK_QUIT (OK " POP3 Party over (%d messages left)" CRLF)
 #define OK_QUIT_EMPTY (OK " POP3 Party over (maildrop empty)" CRLF)
 
@@ -73,7 +74,7 @@ static bool capa_handler(ClientData* client_data, char* commandParameters, uint8
 static bool quit_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     if (client_data->state == AUTHORIZATION) {
-        socket_write(client_data->socket_data, LOGGING_OUT, sizeof LOGGING_OUT - 1);
+        socket_write(client_data->socket_data, OK_QUIT_NO_AUTH, sizeof OK_QUIT_NO_AUTH - 1);
         free_client_data(client_data);
         return true;
     }
@@ -232,33 +233,32 @@ static bool retr_handler(ClientData* client_data, char* commandParameters, uint8
         socket_write(client_data->socket_data, initial_message, len);
 
         // Open the email file
-        FILE* email_file = fopen(client_data->mail_info_list[num - 1].filename, "r");
+        FILE* email_file = fopen(client_data->mail_info_list[num - 1].filename, "r"); //TODO: use the file descriptor already opened
         if (email_file == NULL) {
             // Handle file open error
             socket_write(client_data->socket_data, NO_SUCH_MESSAGE, sizeof NO_SUCH_MESSAGE - 1);
             return false;
         }
 
+        // -- Add . if CRLF. is found
         char line[1024];
-        char last_char = '\0'; // Variable para almacenar el último carácter leído
+        char last_char = '\0';
         while (fgets(line, sizeof(line), email_file) != NULL) {
             size_t line_len = strlen(line);
             if (line_len > 0) {
-                last_char = line[line_len - 1]; // Actualiza el último carácter leído
+                last_char = line[line_len - 1];
             }
 
-            // Check if line starts with a period and prepend an additional period
             if (line[0] == '.' && (line[1] == '\r' && line[2] == '\n')) {
                 socket_write(client_data->socket_data, ".", 1);
             }
             socket_write(client_data->socket_data, line, line_len);
         }
 
-        // Verifica si el último carácter del archivo es un punto sin \r\n después
         if (last_char == '.') {
-            // Escribe el punto adicional y \r\n para cumplir con el protocolo POP3
             socket_write(client_data->socket_data, ".", 1);
         }
+        // --
 
         // Close the file
         fclose(email_file);
@@ -418,7 +418,7 @@ static void* handle_connection_pthread(void* args)
 
 int serve_pop3_concurrent_blocking(const int server, Args* receivedArgs)
 {
-    args = receivedArgs; // TODO: Improve
+    args = receivedArgs;
 
     // TODO: add something similar to 'done' again
     for (;;) {

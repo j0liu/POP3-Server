@@ -15,7 +15,7 @@ static unsigned short port(const char* s)
     const long sl = strtol(s, &end, 10);
 
     if (end == s || '\0' != *end || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno) || sl < 0 || sl > USHRT_MAX) {
-        fprintf(stderr, "port should in in the range of 1-65536: %s\n", s);
+        fprintf(stderr, "Port should in in the range of 1-65536: %s\n", s);
         exit(1);
         return 1;
     }
@@ -26,7 +26,7 @@ static void user(char* s, struct users* user)
 {
     char* p = strchr(s, ':');
     if (p == NULL) {
-        fprintf(stderr, "password not found\n");
+        fprintf(stderr, "Password not found\n");
         exit(1);
     } else {
         *p = 0;
@@ -38,7 +38,7 @@ static void user(char* s, struct users* user)
 
 static void version(void)
 {
-    fprintf(stderr, "POP3 version alpha\n"
+    fprintf(stderr, "POP3 version Alpha\n"
                     "ITBA Protocolos de Comunicación 2023/2 -- Grupo 7\n"
                     "Todos los derechos reservados bajo pena de muerte\n");
 }
@@ -50,6 +50,7 @@ static void usage(const char* progName)
     printf("  -h          Show this help message\n");
     printf("  -v          Display version information\n");
     printf("  -p <port>   Set the POP3 port (default: 110)\n");
+    printf("  -P <port>   Set the DAJT port (default: 6969)\n");
     printf("  -u <user>   Add a user in the format user:pass\n");
     printf("  -d <path>   Set the mail directory path (default: ./Maildir)\n");
 }
