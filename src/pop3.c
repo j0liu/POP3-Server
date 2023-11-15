@@ -393,6 +393,7 @@ int serve_pop3_concurrent_blocking(const int server, Args* receivedArgs)
         socklen_t caddrlen = sizeof(caddr);
         // Wait for a client to connect
         const int client = accept(server, (struct sockaddr*)&caddr, &caddrlen);
+        
         if (client < 0) {
             perror("Unable to accept incoming socket");
         } else {
