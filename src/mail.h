@@ -1,5 +1,5 @@
-#ifndef MAIL_DATA_H
-#define MAIL_DATA_H
+#ifndef MAIL_H
+#define MAIL_H
 
 #include <dirent.h>
 #include <stdbool.h>

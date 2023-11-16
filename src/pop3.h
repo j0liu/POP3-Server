@@ -1,8 +1,7 @@
 #ifndef POP3_H
 #define POP3_H
 
-#include "args.h"
-#include "protocols.h"
+#include "selector.h"
 
 #define CRLF "\r\n"
 #define OK "+OK"
@@ -41,6 +40,16 @@
 #define OK_QUIT (OK " POP3 Party over (%d messages left)" CRLF)
 #define OK_QUIT_EMPTY (OK " POP3 Party over (maildrop empty)" CRLF)
 
-int serve_pop3_concurrent_blocking(const int server, Args* args);
+void welcome_init(const unsigned state, struct selector_key* key);
+void welcome_close(const unsigned state, struct selector_key* key);
+unsigned welcome_write(struct selector_key* key);
+
+void command_read_init(const unsigned state, struct selector_key* key);
+void command_read_close(const unsigned state, struct selector_key* key);
+unsigned command_read(struct selector_key* key);
+
+void command_write_init(const unsigned state, struct selector_key* key);
+void command_write_close(const unsigned state, struct selector_key* key);
+unsigned command_write(struct selector_key* key);
 
 #endif

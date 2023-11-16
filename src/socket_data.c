@@ -1,15 +1,20 @@
-#include "socket_data.h"
-#include "buffer.h"
-#include "netutils.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+
+#include "buffer.h"
+#include "netutils.h"
+#include "socket_data.h"
+
 #define BUFFER_SIZE 1024
 
 SocketData* initialize_socket_data(const int fd)
 {
     SocketData* new_socket_data = malloc(sizeof(SocketData));
+    if (new_socket_data == NULL) {
+        return NULL;
+    }
     new_socket_data->fd = fd;
     buffer_init(&new_socket_data->client_buffer, BUFFER_SIZE, malloc(BUFFER_SIZE));
     buffer_init(&new_socket_data->server_buffer, BUFFER_SIZE, malloc(BUFFER_SIZE));

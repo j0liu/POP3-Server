@@ -1,5 +1,5 @@
-#ifndef BUFFER_H_VelRDAxzvnuFmwEaR0ftrkIinkT
-#define BUFFER_H_VelRDAxzvnuFmwEaR0ftrkIinkT
+#ifndef BUFFER_H
+#define BUFFER_H
 
 #include <stdbool.h>
 #include <stdint.h>

@@ -11,20 +11,22 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "buffer.h"
-#include "client_data.h"
+#include "client.h"
 #include "mail.h"
 #include "netutils.h"
 #include "parser/parser.h"
 #include "pop3.h"
+#include "protocols.h"
 #include "socket_data.h"
 
 Args* args;
 
-#define FINISH_CONNECTION true
+/* #define FINISH_CONNECTION true
 #define CONTINUE_CONNECTION false
 
 static bool capa_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
@@ -285,8 +287,9 @@ CommandDescription available_commands[] = {
     { .name = "NOOP", .handler = noop_handler, .valid_states = TRANSACTION },
     { .name = "RSET", .handler = rset_handler, .valid_states = TRANSACTION },
 };
+*/
 
-static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
+/* static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
 {
     for (; buffer_can_read(&client_data->socket_data->client_buffer);) {
         const uint8_t c = socket_data_read(client_data->socket_data);
@@ -304,9 +307,9 @@ static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
 
     printf("No more data\n");
     return -1;
-}
+} */
 
-static bool process_event(parser_event* event, ClientData* client_data)
+/* static bool process_event(parser_event* event, ClientData* client_data)
 {
     if (event->command_length + event->args_length > MAX_COMMAND_LENGTH) {
         socket_write(client_data->socket_data, ERR_COMMAND_TOO_LONG, sizeof ERR_COMMAND_TOO_LONG - 1);
@@ -327,7 +330,7 @@ static bool process_event(parser_event* event, ClientData* client_data)
     socket_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
 
     return CONTINUE_CONNECTION;
-}
+} */
 
 /**
  * maneja cada conexión entrante
@@ -335,14 +338,14 @@ static bool process_event(parser_event* event, ClientData* client_data)
  * @param fd   descriptor de la conexión entrante.
  * @param caddr información de la conexiónentrante.
  */
-static void pop3_handle_connection(const int fd, const struct sockaddr_in6* caddr)
+/* static void pop3_handle_connection(const int fd, const struct sockaddr_in6* caddr)
 {
     SocketData* socket_data = initialize_socket_data(fd);
     socket_write(socket_data, SERVER_READY, sizeof SERVER_READY - 1);
     ClientData* client_data = initialize_client_data(socket_data);
 
     extern parser_definition pop3_parser_definition;
-    parser* pop3parser = parser_init(NULL, &pop3_parser_definition);
+    parser* pop3parser = parser_init(NULL, &pop3_parser_definition); // TODO: ponerlo en Client
     int result;
 
     while (buffer_can_read(&client_data->socket_data->client_buffer) || socket_data_receive(client_data->socket_data) > 0) {
@@ -371,50 +374,84 @@ static void pop3_handle_connection(const int fd, const struct sockaddr_in6* cadd
     }
     free_client_data(client_data);
     close(fd);
+} */
+
+void welcome_init(const unsigned state, struct selector_key* key)
+{
+    // extern parser_definition pop3_parser_definition;
+    // parser* pop3parser = parser_init(NULL, &pop3_parser_definition);
+
+    // CommandState* d = &ATTACHMENT(key).command_st;
+    // buffer* rb = &(ATTACHMENT(key)->client_data->socket_data->client_buffer);
+    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->server_buffer);
+
+    // Agregamos el mensaje de bienvenida
+    size_t len = 0;
+    uint8_t* ptr = buffer_write_ptr(wb, &len);
+    strncpy((char*)ptr, SERVER_READY, len);
+    buffer_write_adv(wb, strlen(SERVER_READY));
 }
 
-/** rutina de cada hilo worker */
-static void* handle_connection_pthread(void* args)
+void welcome_close(const unsigned state, struct selector_key* key)
 {
-    const struct connection* c = args;
-    pthread_detach(pthread_self());
-    pop3_handle_connection(c->fd, (struct sockaddr_in6*)&c->addr);
-    free(args);
+    /* CommandState* d = &ATTACHMENT(key).command_st; */
+    buffer *rb = &(ATTACHMENT(key)->client_data->socket_data->client_buffer), *wb = &(ATTACHMENT(key)->client_data->socket_data->server_buffer);
+    buffer_reset(rb);
+    buffer_reset(wb);
+}
+
+unsigned welcome_write(struct selector_key* key)
+{
+    /* CommandState* d = &ATTACHMENT(key).command_st; */
+    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->server_buffer);
+    size_t len = 0;
+    uint8_t* wbPtr = buffer_read_ptr(wb, &len);
+    ssize_t sent_count = send(key->fd, wbPtr, len, MSG_NOSIGNAL);
+
+    if (sent_count == -1) {
+        return ERROR;
+    }
+
+    // Para las estadisticas, despues usar un struct
+    // bytes_sent += sent_count;
+
+    buffer_read_adv(wb, sent_count);
+    // Si no pude mandar el mensaje de bienvenida completo, vuelve a intentar
+    if (buffer_can_read(wb)) {
+        return WELCOME;
+    }
+
+    // Si no hay mas para escribir
+    if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+        return ERROR;
+    }
+
+    return WELCOME;
+    // return COMMAND_READ;
+}
+
+void command_read_init(const unsigned state, struct selector_key* key)
+{
+}
+
+void command_read_close(const unsigned state, struct selector_key* key)
+{
+}
+
+unsigned command_read(struct selector_key* key)
+{
     return 0;
 }
 
-int serve_pop3_concurrent_blocking(const int server, Args* receivedArgs)
+void command_write_init(const unsigned state, struct selector_key* key)
 {
-    args = receivedArgs;
+}
 
-    // TODO: add something similar to 'done' again
-    for (;;) {
-        struct sockaddr_in6 caddr;
-        socklen_t caddrlen = sizeof(caddr);
-        // Wait for a client to connect
-        const int client = accept(server, (struct sockaddr*)&caddr, &caddrlen);
-        
-        if (client < 0) {
-            perror("Unable to accept incoming socket");
-        } else {
-            // TODO(juan): limitar la cantidad de hilos concurrentes
-            struct connection* c = malloc(sizeof(struct connection));
-            if (c == NULL) {
-                // lo trabajamos iterativamente
-                pop3_handle_connection(client, (struct sockaddr_in6*)&caddr);
-            } else {
-                pthread_t tid;
-                c->fd = client;
-                c->addrlen = caddrlen;
-                memcpy(&(c->addr), &caddr, caddrlen);
+void command_write_close(const unsigned state, struct selector_key* key)
+{
+}
 
-                if (pthread_create(&tid, 0, handle_connection_pthread, c)) {
-                    free(c);
-                    // lo trabajamos iterativamente
-                    pop3_handle_connection(client, (struct sockaddr_in6*)&caddr);
-                }
-            }
-        }
-    }
+unsigned command_write(struct selector_key* key)
+{
     return 0;
 }

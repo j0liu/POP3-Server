@@ -1,5 +1,5 @@
-#ifndef SELECTOR_H_
-#define SELECTOR_H_
+#ifndef SELECTOR_H
+#define SELECTOR_H
 
 #include <stdbool.h>
 #include <sys/time.h>

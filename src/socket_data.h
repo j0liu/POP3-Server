@@ -1,8 +1,9 @@
 #ifndef SOCKET_DATA_H
 #define SOCKET_DATA_H
 
-#include "buffer.h"
 #include <stdint.h>
+
+#include "buffer.h"
 
 typedef struct SocketData {
     buffer client_buffer;

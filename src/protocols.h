@@ -3,25 +3,59 @@
 
 #include <sys/socket.h>
 
-#include "args.h"
-#include "client_data.h"
+#include "buffer.h"
+#include "pop3.h"
+#include "selector.h"
+#include "stm.h"
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
+#define AUTHORIZATION ((uint8_t)1)
+#define TRANSACTION ((uint8_t)2)
+#define UPDATE ((uint8_t)4)
+#define INACTIVITY_TIMEOUT 600
 
-typedef struct CommandDescription {
-    char* name;
-    bool (*handler)(ClientData* client_data, char* commandParameters, uint8_t parameters_length);
-    uint8_t valid_states;
-} CommandDescription;
+void pop3_accept_passive_sockets(struct selector_key* key);
+void dajt_accept_passive_sockets(struct selector_key* key);
 
-/**
- * estructura utilizada para transportar datos entre el hilo
- * que acepta sockets y los hilos que procesa cada conexión
- */
-struct connection {
-    int fd;
-    socklen_t addrlen;
-    struct sockaddr_in6 addr;
+enum pop3_state {
+    WELCOME,
+    COMMAND_READ,
+    COMMAND_WRITE,
+    DONE,
+    ERROR,
+};
+
+/* Used by read and write */
+/* typedef struct CommandState {
+    buffer *rb, *wb;
+    // struct hello_parser parser; 
+} CommandState; */
+
+static const struct state_definition client_statbl[] = {
+    {
+        .state = WELCOME,
+        .on_arrival = welcome_init,
+        .on_departure = welcome_close,
+        .on_write_ready = welcome_write,
+    },
+    {
+        .state = COMMAND_READ,
+        .on_arrival = command_read_init,
+        .on_departure = command_read_close,
+        .on_read_ready = command_read,
+    },
+    {
+        .state = COMMAND_WRITE,
+        .on_arrival = command_write_init,
+        .on_departure = command_write_close,
+        .on_write_ready = command_write,
+    },
+    {
+        .state = DONE,
+    },
+    {
+        .state = ERROR,
+    },
 };
 
 #endif
