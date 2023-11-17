@@ -6,7 +6,7 @@
 #include "buffer.h"
 #include "pop3.h"
 #include "selector.h"
-#include "stm.h"
+#include "stm/stm.h"
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 #define AUTHORIZATION ((uint8_t)1)
@@ -21,8 +21,9 @@ enum pop3_state {
     WELCOME,
     COMMAND_READ,
     COMMAND_WRITE,
+    COMMAND_PROCESSING,
     DONE,
-    ERROR,
+    ERROR
 };
 
 /* Used by read and write */
@@ -41,7 +42,7 @@ static const struct state_definition client_statbl[] = {
     {
         .state = COMMAND_READ,
         .on_arrival = command_read_init,
-        .on_departure = command_read_close,
+        // .on_departure = command_read_close,
         .on_read_ready = command_read,
     },
     {
@@ -49,6 +50,9 @@ static const struct state_definition client_statbl[] = {
         .on_arrival = command_write_init,
         .on_departure = command_write_close,
         .on_write_ready = command_write,
+    },
+    {
+        .state = COMMAND_PROCESSING,
     },
     {
         .state = DONE,

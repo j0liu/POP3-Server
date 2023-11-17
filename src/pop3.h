@@ -45,7 +45,7 @@ void welcome_close(const unsigned state, struct selector_key* key);
 unsigned welcome_write(struct selector_key* key);
 
 void command_read_init(const unsigned state, struct selector_key* key);
-void command_read_close(const unsigned state, struct selector_key* key);
+// void command_read_close(const unsigned state, struct selector_key* key);
 unsigned command_read(struct selector_key* key);
 
 void command_write_init(const unsigned state, struct selector_key* key);

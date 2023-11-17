@@ -6,7 +6,6 @@
 #include "pop3.h"
 #include "protocols.h"
 #include "selector.h"
-#include "stm.h"
 
 static void pop3_read(struct selector_key* key);
 static void pop3_write(struct selector_key* key);
@@ -57,27 +56,29 @@ fail:
 
 // Handlers top level de la conexión pasiva.
 // son los que emiten los eventos a la maquina de estados.
-static void pop3_done(struct selector_key* key);
+// static void pop3_done(struct selector_key* key);
 
 static void pop3_read(struct selector_key* key)
 {
     struct state_machine* stm = &ATTACHMENT(key)->stm;
-    const enum pop3_state st = stm_handler_read(stm, key);
+    // const enum pop3_state st = 
+    stm_handler_read(stm, key);
 
-    if (ERROR == st || DONE == st) {
-        pop3_done(key);
-    }
+    // if (ERROR == st || DONE == st) {
+    //     pop3_done(key);
+    // }
 }
 
 static void
 pop3_write(struct selector_key* key)
 {
     struct state_machine* stm = &ATTACHMENT(key)->stm;
-    const enum pop3_state st = stm_handler_write(stm, key);
+    // const enum pop3_state st = 
+    stm_handler_write(stm, key);
 
-    if (ERROR == st || DONE == st) {
-        pop3_done(key);
-    }
+    // if (ERROR == st || DONE == st) {
+    //     pop3_done(key);
+    // }
 }
 
 static void
@@ -86,16 +87,16 @@ pop3_close(struct selector_key* key)
     free_client(ATTACHMENT(key));
 }
 
-static void
-pop3_done(struct selector_key* key)
-{
-    int fd = ATTACHMENT(key)->connection->fd;
+// static void
+// pop3_done(struct selector_key* key)
+// {
+//     int fd = ATTACHMENT(key)->connection->fd;
 
-    if (fd != -1) {
-        if (SELECTOR_SUCCESS != selector_unregister_fd(key->s, fd)) {
-            abort();
-        }
-        close(fd);
-    }
-    // Free
-}
+//     if (fd != -1) {
+//         if (SELECTOR_SUCCESS != selector_unregister_fd(key->s, fd)) {
+//             abort();
+//         }
+//         close(fd);
+//     }
+//     // Free
+// }

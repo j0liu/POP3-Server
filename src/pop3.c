@@ -26,19 +26,20 @@
 
 Args* args;
 
-/* #define FINISH_CONNECTION true
+#define FINISH_CONNECTION true
 #define CONTINUE_CONNECTION false
 
 static bool capa_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
-    if (client_data->state == AUTHORIZATION) {
-        socket_write(client_data->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1);
-        return CONTINUE_CONNECTION;
-    }
-    socket_write(client_data->socket_data, CAPA_MSG_TRANSACTION, sizeof CAPA_MSG_TRANSACTION - 1);
+    // if (client_data->state == AUTHORIZATION) {
+    //     socket_write(client_data->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1);
+    //     return CONTINUE_CONNECTION;
+    // }
+    // socket_write(client_data->socket_data, CAPA_MSG_TRANSACTION, sizeof CAPA_MSG_TRANSACTION - 1);
+    printf("CAPA\n");
     return CONTINUE_CONNECTION;
 }
-
+/*
 static bool quit_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
 {
     if (client_data->state == AUTHORIZATION) {
@@ -274,8 +275,12 @@ static bool rset_handler(ClientData* client_data, char* commandParameters, uint8
     socket_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
     return CONTINUE_CONNECTION;
 }
-
+*/
 CommandDescription available_commands[] = {
+    { .name = "CAPA", .handler = capa_handler, .valid_states = AUTHORIZATION | TRANSACTION },
+    { .name = "USER", .handler = capa_handler, .valid_states = AUTHORIZATION },
+};
+    /*
     { .name = "CAPA", .handler = capa_handler, .valid_states = AUTHORIZATION | TRANSACTION },
     { .name = "QUIT", .handler = quit_handler, .valid_states = AUTHORIZATION | TRANSACTION },
     { .name = "USER", .handler = user_handler, .valid_states = AUTHORIZATION },
@@ -289,9 +294,9 @@ CommandDescription available_commands[] = {
 };
 */
 
-/* static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
+static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
 {
-    for (; buffer_can_read(&client_data->socket_data->client_buffer);) {
+    for (; buffer_can_read(&client_data->socket_data->read_buffer);) {
         const uint8_t c = socket_data_read(client_data->socket_data);
         const parser_event* event = parser_feed(pop3parser, c);
         if (event == NULL) {
@@ -307,12 +312,12 @@ CommandDescription available_commands[] = {
 
     printf("No more data\n");
     return -1;
-} */
+}
 
-/* static bool process_event(parser_event* event, ClientData* client_data)
+static bool process_event(parser_event* event, ClientData* client_data)
 {
     if (event->command_length + event->args_length > MAX_COMMAND_LENGTH) {
-        socket_write(client_data->socket_data, ERR_COMMAND_TOO_LONG, sizeof ERR_COMMAND_TOO_LONG - 1);
+        socket_buffer_write(client_data->socket_data, ERR_COMMAND_TOO_LONG, sizeof ERR_COMMAND_TOO_LONG - 1);
         return FINISH_CONNECTION;
     }
 
@@ -320,17 +325,17 @@ CommandDescription available_commands[] = {
     for (int i = 0; i < (int)N(available_commands); i++) {
         if (event->command_length == 4 && strncasecmp(event->command, available_commands[i].name, event->command_length) == 0) {
             if ((client_data->state & available_commands[i].valid_states) == 0) {
-                socket_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
+                socket_buffer_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
                 return CONTINUE_CONNECTION;
             }
             return available_commands[i].handler(client_data, event->args, event->args_length);
         }
     }
 
-    socket_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
+    socket_buffer_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
 
     return CONTINUE_CONNECTION;
-} */
+}
 
 /**
  * maneja cada conexión entrante
@@ -348,12 +353,12 @@ CommandDescription available_commands[] = {
     parser* pop3parser = parser_init(NULL, &pop3_parser_definition); // TODO: ponerlo en Client
     int result;
 
-    while (buffer_can_read(&client_data->socket_data->client_buffer) || socket_data_receive(client_data->socket_data) > 0) {
+    while (buffer_can_read(&client_data->socket_data->read_buffer) || socket_data_receive(client_data->socket_data) > 0) {
         if (difftime(time(NULL), client_data->last_activity_time) > INACTIVITY_TIMEOUT) {
             socket_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
             break;
         }
-        printf("buffer_can_read: %d\n", buffer_can_read(&client_data->socket_data->client_buffer));
+        printf("buffer_can_read: %d\n", buffer_can_read(&client_data->socket_data->read_buffer));
 
         if (consume_pop3_buffer(pop3parser, client_data) == 0) {
             printf("Consume pop3 buffer\n");
@@ -382,8 +387,8 @@ void welcome_init(const unsigned state, struct selector_key* key)
     // parser* pop3parser = parser_init(NULL, &pop3_parser_definition);
 
     // CommandState* d = &ATTACHMENT(key).command_st;
-    // buffer* rb = &(ATTACHMENT(key)->client_data->socket_data->client_buffer);
-    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->server_buffer);
+    // buffer* rb = &(ATTACHMENT(key)->client_data->socket_data->read_buffer);
+    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->write_buffer);
 
     // Agregamos el mensaje de bienvenida
     size_t len = 0;
@@ -395,7 +400,7 @@ void welcome_init(const unsigned state, struct selector_key* key)
 void welcome_close(const unsigned state, struct selector_key* key)
 {
     /* CommandState* d = &ATTACHMENT(key).command_st; */
-    buffer *rb = &(ATTACHMENT(key)->client_data->socket_data->client_buffer), *wb = &(ATTACHMENT(key)->client_data->socket_data->server_buffer);
+    buffer *rb = &(ATTACHMENT(key)->client_data->socket_data->read_buffer), *wb = &(ATTACHMENT(key)->client_data->socket_data->write_buffer);
     buffer_reset(rb);
     buffer_reset(wb);
 }
@@ -403,7 +408,7 @@ void welcome_close(const unsigned state, struct selector_key* key)
 unsigned welcome_write(struct selector_key* key)
 {
     /* CommandState* d = &ATTACHMENT(key).command_st; */
-    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->server_buffer);
+    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->write_buffer);
     size_t len = 0;
     uint8_t* wbPtr = buffer_read_ptr(wb, &len);
     ssize_t sent_count = send(key->fd, wbPtr, len, MSG_NOSIGNAL);
@@ -426,21 +431,65 @@ unsigned welcome_write(struct selector_key* key)
         return ERROR;
     }
 
-    return WELCOME;
-    // return COMMAND_READ;
+    // return WELCOME;
+    return COMMAND_READ;
 }
 
-void command_read_init(const unsigned state, struct selector_key* key)
-{
+void command_read_init(const unsigned state, struct selector_key* key) {
+    Client * client = ATTACHMENT(key);
+    extern parser_definition pop3_parser_definition;
+    client->pop3parser = parser_init(NULL, &pop3_parser_definition); 
 }
 
-void command_read_close(const unsigned state, struct selector_key* key)
-{
-}
+// void command_read_close(const unsigned state, struct selector_key* key)
+// {
+// }
 
 unsigned command_read(struct selector_key* key)
 {
-    return 0;
+    Client * client = ATTACHMENT(key);
+    ClientData * client_data = client->client_data;
+
+    buffer* rb = &client_data->socket_data->read_buffer;
+    size_t len;
+    uint8_t *rbPtr = buffer_write_ptr(rb, &len);
+    ssize_t read_count = recv(key->fd, rbPtr, len, 0); // TODO: Ver flags?
+
+    if (read_count == -1) {
+        return ERROR;
+    } else if (read_count == 0) {
+        return DONE;
+    }
+
+    buffer_write_adv(rb, read_count);
+    rbPtr = buffer_read_ptr(rb, &len);
+
+    
+    int result;
+
+    while (buffer_can_read(rb)) {
+        // if (difftime(time(NULL), client_data->last_activity_time) > INACTIVITY_TIMEOUT) {
+        //     socket_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
+        //     break;
+        // }
+        //printf("buffer_can_read: %d\n", buffer_can_read(&client_data->socket_data->read_buffer));
+
+        if (consume_pop3_buffer(client->pop3parser, client_data) == 0) {
+            printf("Consume pop3 buffer\n");
+
+            parser_event* event = parser_pop_event(client->pop3parser);
+            if (event != NULL) {
+                printf("Event not null\n");
+                result = process_event(event, client_data);
+                free(event);
+                if (result == FINISH_CONNECTION)
+                    break;
+            }
+        }
+    }
+    
+
+    return COMMAND_READ;
 }
 
 void command_write_init(const unsigned state, struct selector_key* key)

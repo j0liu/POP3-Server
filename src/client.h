@@ -9,7 +9,8 @@
 #include "mail.h"
 #include "protocols.h"
 #include "socket_data.h"
-#include "stm.h"
+#include "stm/stm.h"
+#include "parser/parser.h"
 
 // TODO: Change ClientData for DAJT protocol
 typedef struct ClientData {
@@ -38,6 +39,7 @@ typedef struct Client {
     Connection* connection;
     struct state_machine stm;
     ClientData* client_data;
+    parser* pop3parser;
     // CommandState* command_st;
 } Client;
 

@@ -4,9 +4,6 @@
 #include <time.h>
 
 #include "client.h"
-#include "protocols.h"
-#include "socket_data.h"
-#include "stm.h"
 
 ClientData* initialize_client_data(SocketData* socket_data)
 {
