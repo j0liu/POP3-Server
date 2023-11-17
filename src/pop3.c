@@ -97,12 +97,11 @@ static int pass_handler(ClientData* client_data, char* commandParameters, uint8_
     if (strcmp(client_data->user->pass, commandParameters) == 0) {
         client_data->state = TRANSACTION;
         client_data->mail_info_list = get_mail_info_list(args.maildir_path, &client_data->mail_count, client_data->user->name);
-        if (client_data->mail_info_list == NULL) {
-            socket_buffer_write(client_data->socket_data, ERR_LOCKED_MAILDROP, sizeof ERR_LOCKED_MAILDROP - 1);
-            free_client_data(client_data);
-            return ERROR; 
-        }
-        printf("hola\n");
+        // if (client_data->mail_info_list == NULL) {
+            // socket_buffer_write(client_data->socket_data, ERR_LOCKED_MAILDROP, sizeof ERR_LOCKED_MAILDROP - 1);
+            // free_client_data(client_data);
+            // return C; 
+        // }
         socket_buffer_write(client_data->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->mail_count_not_deleted = client_data->mail_count;
         client_data->command_state.finished = true; 
@@ -334,7 +333,10 @@ static bool process_event(parser_event* event, ClientData* client_data)
         if (event->command_length == 4 && strncasecmp(event->command, available_commands[i].name, event->command_length) == 0) {
             if ((client_data->state & available_commands[i].valid_states) == 0) {
                 socket_buffer_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
-                return CONTINUE_CONNECTION;
+                client_data->command_state.command_index = -1;
+                client_data->command_state.argLen = 0;
+                client_data->command_state.finished = false;
+                return FINISH_CONNECTION; 
             }
             client_data->command_state.command_index = i;
             client_data->command_state.argLen = event->args_length;

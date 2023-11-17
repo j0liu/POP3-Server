@@ -2,6 +2,7 @@
 #define SELECTOR_H
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include <sys/time.h>
 
 /**

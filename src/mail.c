@@ -27,7 +27,7 @@ int count_mails(const char* directory_path)
 {
     DIR* dir = opendir(directory_path);
     if (dir == NULL)
-        return -1;
+        return 0;
 
     int count = 0;
     struct dirent* entry;
@@ -69,12 +69,13 @@ MailInfo* get_mail_info_list(const char* directory_path, int* size, const char* 
     int cur_count = count_mails(cur_path);
     int new_count = count_mails(new_path);
 
-    if (cur_count < 0 || new_count < 0) {
+    int total_count = cur_count + new_count;
+    *size = total_count;
+
+    if (!total_count) {
         return NULL;
     }
 
-    int total_count = cur_count + new_count;
-    *size = total_count;
     MailInfo* mail_info_list = malloc(sizeof(MailInfo) * total_count);
 
     DIR* dir;
