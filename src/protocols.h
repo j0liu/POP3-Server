@@ -41,14 +41,14 @@ static const struct state_definition client_statbl[] = {
     },
     {
         .state = COMMAND_READ,
-        .on_arrival = command_read_init,
+        // .on_arrival = command_read_init,
         // .on_departure = command_read_close,
         .on_read_ready = command_read,
     },
     {
         .state = COMMAND_WRITE,
-        .on_arrival = command_write_init,
-        .on_departure = command_write_close,
+        // .on_arrival = command_write_init,
+        // .on_departure = command_write_close,
         .on_write_ready = command_write,
     },
     {

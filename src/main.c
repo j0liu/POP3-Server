@@ -58,7 +58,7 @@ int main(const int argc, char** argv)
     }
     // ---- Signals End ---
 
-    Args args;
+    extern Args args;
     parse_args(argc, argv, &args);
     int no = 0;
     selector_status ss = SELECTOR_SUCCESS;

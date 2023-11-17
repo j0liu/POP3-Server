@@ -13,6 +13,16 @@
 #include "parser/parser.h"
 
 // TODO: Change ClientData for DAJT protocol
+
+#define ARG_MAX_LENGTH 255
+
+typedef struct CommandState {
+    int command_index;
+    char arguments[ARG_MAX_LENGTH];
+    int argLen;
+    bool finished;
+} CommandState;
+
 typedef struct ClientData {
     SocketData* socket_data;
     uint8_t state;
@@ -21,11 +31,12 @@ typedef struct ClientData {
     int mail_count;
     int mail_count_not_deleted;
     time_t last_activity_time;
+    CommandState command_state;
 } ClientData;
 
 typedef struct CommandDescription {
     char* name;
-    bool (*handler)(ClientData* client_data, char* commandParameters, uint8_t parameters_length);
+    int (*handler)(ClientData* client_data, char* commandParameters, uint8_t parameters_length);
     uint8_t valid_states;
 } CommandDescription;
 
@@ -40,6 +51,7 @@ typedef struct Client {
     struct state_machine stm;
     ClientData* client_data;
     parser* pop3parser;
+
     // CommandState* command_st;
 } Client;
 

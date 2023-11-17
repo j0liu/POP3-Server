@@ -9,6 +9,8 @@
 
 #include "args.h"
 
+Args args;
+
 static unsigned short port(const char* s)
 {
     char* end = 0;

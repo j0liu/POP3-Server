@@ -24,15 +24,13 @@ void parser_destroy(struct parser* p)
     }
 }
 
-struct parser* parser_init(const unsigned* classes, const struct parser_definition* def)
+struct parser* parser_init(const struct parser_definition* def)
 {
     struct parser* newParser = malloc(sizeof(*newParser));
     if (newParser != NULL) {
         memset(newParser, 0, sizeof(*newParser));
         newParser->def = def;
         newParser->state = def->start_state;
-        // newParser->list    = NULL;
-        // newParser->last    = NULL;
         newParser->eventToReturn = calloc(1, sizeof(parser_event));
     }
     return newParser;
@@ -72,32 +70,8 @@ const struct parser_event* parser_feed(struct parser* p, const uint8_t c)
     return p->eventToReturn;
 }
 
-// static const unsigned classes[0xFF] = {0x00};
-
-// const unsigned * parser_no_classes(void) {
-//     return classes;
-// }
-
-// void add_finished_event(parser * p) {
-//     if(p->list == NULL) {
-//         p->list = p->eventToReturn;
-//         p->last = p->eventToReturn;
-//     } else {
-//         p->last->next = p->eventToReturn;
-//         p->last = p->eventToReturn;
-//     }
-//     p->eventToReturn = calloc(1, sizeof(parser_event));
-// }
-
 parser_event* parser_pop_event(parser* p)
 {
-    // if(p->list == NULL) {
-    //     return NULL;
-    // } else {
-    //     parser_event * ret = p->list;
-    //     p->list = p->list->next;
-    //     return ret;
-    // }
     parser_event* ret = p->eventToReturn;
     p->eventToReturn = calloc(1, sizeof(parser_event));
     return ret;

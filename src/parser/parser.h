@@ -71,7 +71,7 @@ struct parser_definition {
  *
  * `classes`: caracterización de cada caracter (256 elementos)
  */
-struct parser* parser_init(const unsigned* classes, const struct parser_definition* def);
+struct parser* parser_init(const struct parser_definition* def);
 
 /** destruye el parser */
 void parser_destroy(struct parser* p);
