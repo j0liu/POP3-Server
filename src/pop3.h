@@ -40,12 +40,15 @@
 #define OK_QUIT (OK " POP3 Party over (%d messages left)" CRLF)
 #define OK_QUIT_EMPTY (OK " POP3 Party over (maildrop empty)" CRLF)
 
-void welcome_init(const unsigned state, struct selector_key* key);
+void welcome_init(const unsigned prev_state, const unsigned state, struct selector_key* key);
 void welcome_close(const unsigned state, struct selector_key* key);
 unsigned welcome_write(struct selector_key* key);
 unsigned command_read(struct selector_key* key);
+void command_read_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key);
 unsigned command_write(struct selector_key* key);
-void done_arrival(const unsigned state, struct selector_key* key);
+void command_write_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key);
+void done_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key);
 unsigned error_write(struct selector_key* key);
-
+void open_mail(const unsigned prev_state, const unsigned state, struct selector_key* key);
+unsigned command_processing_write(struct selector_key* key);
 #endif

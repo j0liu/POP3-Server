@@ -29,8 +29,9 @@ extern Args args;
 #define FINISH_CONNECTION true
 #define CONTINUE_CONNECTION false
 
-static int capa_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int capa_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData* client_data = client->client_data;
     if (client_data->state == AUTHORIZATION) {
         // TODO: Manejar escrituras 
         socket_buffer_write(client_data->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1); 
@@ -41,8 +42,9 @@ static int capa_handler(ClientData* client_data, char* commandParameters, uint8_
     return COMMAND_WRITE; 
 }
 
-static int quit_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int quit_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData* client_data = client->client_data;
     if (client_data->state == AUTHORIZATION) {
         socket_buffer_write(client_data->socket_data, OK_QUIT_NO_AUTH, sizeof OK_QUIT_NO_AUTH - 1);
         return DONE;
@@ -73,8 +75,9 @@ static int quit_handler(ClientData* client_data, char* commandParameters, uint8_
     return DONE;
 }
 
-static int user_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int user_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData* client_data = client->client_data;
     for (int i = 0; i < (int)args.quantity_users; i++) {
         if (strncmp(args.users[i].name, commandParameters, parameters_length) == 0 && args.users[i].name[parameters_length] == '\0') {
             socket_buffer_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
@@ -88,8 +91,9 @@ static int user_handler(ClientData* client_data, char* commandParameters, uint8_
     return COMMAND_WRITE; 
 }
 
-static int pass_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int pass_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData* client_data = client->client_data;
     if (client_data->user == NULL) {
         socket_buffer_write(client_data->socket_data, NO_USERNAME_GIVEN, sizeof NO_USERNAME_GIVEN - 1);
         return ERROR;
@@ -134,8 +138,9 @@ static int first_argument_to_int(ClientData* client_data, char* commandParameter
     return -1;
 }
 
-static int stat_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int stat_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData * client_data = client->client_data;
     int count = 0;
     size_t size = 0;
     for (int i = 0; i < client_data->mail_count; i++) {
@@ -151,8 +156,9 @@ static int stat_handler(ClientData* client_data, char* commandParameters, uint8_
     return COMMAND_WRITE;
 }
 
-static int list_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int list_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData * client_data = client->client_data;
     char buff[100] = { 0 }; // TODO: Improve
     while (*commandParameters == ' ') {
         commandParameters++;
@@ -181,8 +187,10 @@ static int list_handler(ClientData* client_data, char* commandParameters, uint8_
     return COMMAND_WRITE;
 }
 
-static int retr_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int retr_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData * client_data = client->client_data;
+    // if
     while (*commandParameters == ' ') {
         commandParameters++;
         parameters_length--;
@@ -241,8 +249,10 @@ static int retr_handler(ClientData* client_data, char* commandParameters, uint8_
     return COMMAND_WRITE;
 }
 
-static int dele_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int dele_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData* client_data = client->client_data;
+    
     while (*commandParameters == ' ') {
         commandParameters++;
         parameters_length--;
@@ -268,16 +278,18 @@ static int dele_handler(ClientData* client_data, char* commandParameters, uint8_
     return COMMAND_WRITE;    
 }
 
-static int noop_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int noop_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData * client_data = client->client_data;
     socket_buffer_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
     
     client_data->command_state.finished = true; 
     return COMMAND_WRITE;
 }
 
-static int rset_handler(ClientData* client_data, char* commandParameters, uint8_t parameters_length)
+static int rset_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
+    ClientData * client_data = client->client_data;
     for (int i = 0; i < client_data->mail_count; i++) {
         client_data->mail_info_list[i].deleted = false;
     }
@@ -332,11 +344,7 @@ static bool process_event(parser_event* event, ClientData* client_data)
     for (int i = 0; i < (int)N(available_commands); i++) {
         if (event->command_length == 4 && strncasecmp(event->command, available_commands[i].name, event->command_length) == 0) {
             if ((client_data->state & available_commands[i].valid_states) == 0) {
-                socket_buffer_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
-                client_data->command_state.command_index = -1;
-                client_data->command_state.argLen = 0;
-                client_data->command_state.finished = false;
-                return FINISH_CONNECTION; 
+                break;
             }
             client_data->command_state.command_index = i;
             client_data->command_state.argLen = event->args_length;
@@ -347,8 +355,10 @@ static bool process_event(parser_event* event, ClientData* client_data)
     }
 
     socket_buffer_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
-
-    return CONTINUE_CONNECTION;
+    client_data->command_state.command_index = -1;
+    client_data->command_state.argLen = 0;
+    client_data->command_state.finished = false;
+    return FINISH_CONNECTION; 
 }
 
 /**
@@ -395,7 +405,7 @@ static bool process_event(parser_event* event, ClientData* client_data)
     close(fd);
 } */
 
-void welcome_init(const unsigned state, struct selector_key* key)
+void welcome_init(const unsigned prev_state, const unsigned state, struct selector_key* key)
 {
     // extern parser_definition pop3_parser_definition;
     // parser* pop3parser = parser_init(&pop3_parser_definition);
@@ -441,12 +451,19 @@ unsigned welcome_write(struct selector_key* key)
     }
 
     // Si no hay mas para escribir
-    if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-        return ERROR;
-    }
+    // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+    //     return ERROR;
+    // }
 
     // return WELCOME;
     return COMMAND_READ;
+}
+
+void command_read_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
+    if(prev_state != state) {
+        // TODO: Manejar error (!= SELECTOR_SUCCESS)
+        selector_set_interest(key->s, key->fd, OP_READ);
+    }
 }
 
 unsigned command_read(struct selector_key* key)
@@ -487,23 +504,28 @@ unsigned command_read(struct selector_key* key)
                 free(event);
                 parser_reset(client->pop3parser);
                 if (result == CONTINUE_CONNECTION) {
-                    if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
-                        // TODO: Manejar error?
-                        return DONE;
-                    }
                     printf("Continue connection\n");
                     return COMMAND_WRITE; 
                 }
 
                 // TODO: Manejar errores
-                if (result == FINISH_CONNECTION)
-                    break;
+                if (result == FINISH_CONNECTION) {
+                    printf("Error!");
+                    return ERROR; 
+                }
             }
         }
     }
     
 
     return COMMAND_READ;
+}
+
+void command_write_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
+    if(prev_state != state) {
+        // TODO: Manejar error (!= SELECTOR_SUCCESS)
+        selector_set_interest(key->s, key->fd, OP_WRITE);
+    }
 }
 
 unsigned command_write(struct selector_key* key)
@@ -513,31 +535,40 @@ unsigned command_write(struct selector_key* key)
     ClientData * client_data = client->client_data;
     CommandState * command_state = &client_data->command_state;
     
+    int result_state = -1;
     if (command_state->command_index != -1) {
-        int result_state = available_commands[command_state->command_index].handler(client_data, command_state->arguments, command_state->argLen);
-
-        size_t len = 0;
-        uint8_t* ptr = buffer_read_ptr(&(client_data->socket_data->write_buffer), &len);
-        ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
-
-        if (sent_count == -1) return ERROR;
-
-        buffer_read_adv(&(client_data->socket_data->write_buffer), sent_count);
-        if (client_data->command_state.finished && !buffer_can_read(&(client_data->socket_data->write_buffer))) {
-            client_data->command_state.command_index = -1;
-            client_data->command_state.argLen = 0;
-            client_data->command_state.finished = false;
-            if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-                return ERROR;
-            }
-            return COMMAND_READ;
-        }
-        return result_state; 
+        result_state = available_commands[command_state->command_index].handler(client, command_state->arguments, command_state->argLen);
     }
-    return ERROR;
+
+    size_t len = 0;
+    uint8_t* ptr = buffer_read_ptr(&(client_data->socket_data->write_buffer), &len);
+    ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
+
+    if (sent_count == -1) return ERROR;
+
+    buffer_read_adv(&(client_data->socket_data->write_buffer), sent_count);
+    if (client_data->command_state.finished && !buffer_can_read(&(client_data->socket_data->write_buffer))) {
+        client_data->command_state.command_index = -1;
+        client_data->command_state.argLen = 0;
+        client_data->command_state.finished = false;
+        // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+        //     return ERROR;
+        // }
+        return COMMAND_READ;
+    }
+    return result_state != -1? result_state : COMMAND_WRITE; 
 }
 
-void done_arrival(const unsigned state, struct selector_key* key) {
+
+void open_mail(const unsigned prev_state, const unsigned state, struct selector_key* key) {
+
+}
+
+unsigned command_processing_write(struct selector_key* key) {
+    return 0;
+}
+
+void done_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
     // Client * client = ATTACHMENT(key);
     // ClientData * client_data = client->client_data;
     // CommandState * command_state = &client_data->command_state;
@@ -559,12 +590,12 @@ unsigned error_write(struct selector_key* key) {
 
     buffer_read_adv(&(client_data->socket_data->write_buffer), sent_count);
     if (!buffer_can_read(&(client_data->socket_data->write_buffer))) {
-        if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-            return ERROR;
-        }
-        if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-            return DONE;
-        }
+        // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+        //     return ERROR;
+        // }
+        // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+        //     return DONE;
+        // }
         return COMMAND_READ;
     }
     return ERROR;

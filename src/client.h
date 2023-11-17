@@ -16,6 +16,8 @@
 
 #define ARG_MAX_LENGTH 255
 
+typedef struct Client Client;
+
 typedef struct CommandState {
     int command_index;
     char arguments[ARG_MAX_LENGTH];
@@ -36,7 +38,7 @@ typedef struct ClientData {
 
 typedef struct CommandDescription {
     char* name;
-    int (*handler)(ClientData* client_data, char* commandParameters, uint8_t parameters_length);
+    int (*handler)(Client* client, char* commandParameters, uint8_t parameters_length);
     uint8_t valid_states;
 } CommandDescription;
 
@@ -46,14 +48,14 @@ typedef struct Connection {
     struct sockaddr_in6 addr;
 } Connection;
 
-typedef struct Client {
+struct Client {
     Connection* connection;
     struct state_machine stm;
     ClientData* client_data;
     parser* pop3parser;
 
     // CommandState* command_st;
-} Client;
+};
 
 #define ATTACHMENT(key) ((Client*)(key)->data)
 

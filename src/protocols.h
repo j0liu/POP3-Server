@@ -41,18 +41,18 @@ static const struct state_definition client_statbl[] = {
     },
     {
         .state = COMMAND_READ,
-        // .on_arrival = command_read_init,
-        // .on_departure = command_read_close,
+        .on_arrival = command_read_arrival,
         .on_read_ready = command_read,
     },
     {
         .state = COMMAND_WRITE,
-        // .on_arrival = command_write_init,
-        // .on_departure = command_write_close,
+        .on_arrival = command_write_arrival,
         .on_write_ready = command_write,
     },
     {
         .state = COMMAND_PROCESSING,
+        .on_arrival = open_mail,
+        .on_write_ready = command_processing_write,
     },
     {
         .state = DONE,
@@ -60,6 +60,7 @@ static const struct state_definition client_statbl[] = {
     },
     {
         .state = ERROR,
+        .on_arrival = command_write_arrival,
         .on_write_ready = error_write
     },
 };

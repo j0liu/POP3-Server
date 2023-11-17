@@ -48,7 +48,7 @@ struct state_definition {
     unsigned state;
 
     /** ejecutado al arribar al estado */
-    void (*on_arrival)(const unsigned state, struct selector_key* key);
+    void (*on_arrival)(const unsigned prev_state, const unsigned state, struct selector_key* key);
     /** ejecutado al salir del estado */
     void (*on_departure)(const unsigned state, struct selector_key* key);
     /** ejecutado cuando hay datos disponibles para ser leidos */

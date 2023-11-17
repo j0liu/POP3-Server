@@ -24,7 +24,8 @@ inline static void handle_first(struct state_machine* stm, struct selector_key* 
     if (stm->current == NULL) {
         stm->current = stm->states + stm->initial;
         if (NULL != stm->current->on_arrival) {
-            stm->current->on_arrival(stm->current->state, key);
+            //mandamos como estado previo al estado inicial tambien
+            stm->current->on_arrival(stm->current->state, stm->current->state, key);
         }
     }
 }
@@ -38,10 +39,11 @@ inline static void jump(struct state_machine* stm, unsigned next, struct selecto
         if (stm->current != NULL && stm->current->on_departure != NULL) {
             stm->current->on_departure(stm->current->state, key);
         }
+        unsigned prev_state = stm->current->state;
         stm->current = stm->states + next;
 
         if (NULL != stm->current->on_arrival) {
-            stm->current->on_arrival(stm->current->state, key);
+            stm->current->on_arrival(prev_state, stm->current->state, key);
         }
     }
 }
