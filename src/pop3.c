@@ -458,9 +458,7 @@ unsigned command_read(struct selector_key* key)
     uint8_t *rbPtr = buffer_write_ptr(rb, &len);
     ssize_t read_count = recv(key->fd, rbPtr, len, 0); // TODO: Ver flags?
 
-    if (read_count == -1) {
-        return ERROR;
-    } else if (read_count == 0) {
+    if (read_count <= 0) {
         return DONE;
     }
 
@@ -488,7 +486,8 @@ unsigned command_read(struct selector_key* key)
                 parser_reset(client->pop3parser);
                 if (result == CONTINUE_CONNECTION) {
                     if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
-                        return ERROR;
+                        // TODO: Manejar error?
+                        return DONE;
                     }
                     printf("Continue connection\n");
                     return COMMAND_WRITE; 
@@ -526,7 +525,6 @@ unsigned command_write(struct selector_key* key)
             client_data->command_state.command_index = -1;
             client_data->command_state.argLen = 0;
             client_data->command_state.finished = false;
-            printf("saliendo se write\n");
             if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
                 return ERROR;
             }
@@ -537,3 +535,35 @@ unsigned command_write(struct selector_key* key)
     return ERROR;
 }
 
+void done_arrival(const unsigned state, struct selector_key* key) {
+    // Client * client = ATTACHMENT(key);
+    // ClientData * client_data = client->client_data;
+    // CommandState * command_state = &client_data->command_state;
+
+    if (selector_unregister_fd(key->s, key->fd) != SELECTOR_SUCCESS) {
+        // TODO: Ver si esto esta ok
+        abort();
+    }
+}
+
+unsigned error_write(struct selector_key* key) {
+    Client * client = ATTACHMENT(key);
+    ClientData * client_data = client->client_data;
+    size_t len = 0;
+    uint8_t* ptr = buffer_read_ptr(&(client_data->socket_data->write_buffer), &len);
+    ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
+
+    if (sent_count == -1) return ERROR;
+
+    buffer_read_adv(&(client_data->socket_data->write_buffer), sent_count);
+    if (!buffer_can_read(&(client_data->socket_data->write_buffer))) {
+        if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+            return ERROR;
+        }
+        if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+            return DONE;
+        }
+        return COMMAND_READ;
+    }
+    return ERROR;
+}

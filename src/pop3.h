@@ -45,5 +45,7 @@ void welcome_close(const unsigned state, struct selector_key* key);
 unsigned welcome_write(struct selector_key* key);
 unsigned command_read(struct selector_key* key);
 unsigned command_write(struct selector_key* key);
+void done_arrival(const unsigned state, struct selector_key* key);
+unsigned error_write(struct selector_key* key);
 
 #endif

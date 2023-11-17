@@ -56,9 +56,11 @@ static const struct state_definition client_statbl[] = {
     },
     {
         .state = DONE,
+        .on_arrival = done_arrival,
     },
     {
         .state = ERROR,
+        .on_write_ready = error_write
     },
 };
 
