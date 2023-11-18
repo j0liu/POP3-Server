@@ -45,15 +45,17 @@ inline uint8_t* buffer_read_ptr(buffer* b, size_t* nbyte)
     return b->read;
 }
 
-inline void buffer_write_adv(buffer* b, const ssize_t bytes)
+inline uint8_t * buffer_write_adv(buffer* b, const ssize_t bytes)
 {
     if (bytes > -1) {
         b->write += (size_t)bytes;
         assert(b->write <= b->limit);
+        return b->write;
     }
+    return NULL;
 }
 
-inline void buffer_read_adv(buffer* b, const ssize_t bytes)
+inline uint8_t * buffer_read_adv(buffer* b, const ssize_t bytes)
 {
     if (bytes > -1) {
         b->read += (size_t)bytes;
@@ -63,7 +65,9 @@ inline void buffer_read_adv(buffer* b, const ssize_t bytes)
             // compactacion poco costosa
             buffer_compact(b);
         }
+        return b->read;
     }
+    return NULL;
 }
 
 inline uint8_t buffer_read(buffer* b)
@@ -99,4 +103,11 @@ void buffer_compact(buffer* b)
         b->read = b->data;
         b->write = b->data + n;
     }
+}
+
+ssize_t buffer_ncopy(buffer* b, uint8_t *source, ssize_t n) {
+    ssize_t bytes = n > b->limit - b->write ? b->limit - b->write : n;
+    memcpy(b->write, source, bytes);
+    b->write += bytes;
+    return bytes; 
 }

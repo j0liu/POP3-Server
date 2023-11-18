@@ -21,9 +21,9 @@ enum pop3_state {
     WELCOME,
     COMMAND_READ,
     COMMAND_WRITE,
-    COMMAND_PROCESSING,
     DONE,
-    ERROR
+    ERROR,
+    // COMMAND_PROCESSING,
 };
 
 /* Used by read and write */
@@ -48,12 +48,12 @@ static const struct state_definition client_statbl[] = {
         .state = COMMAND_WRITE,
         .on_arrival = command_write_arrival,
         .on_write_ready = command_write,
+        .on_read_ready = command_write,
     },
-    {
-        .state = COMMAND_PROCESSING,
-        .on_arrival = open_mail,
-        .on_write_ready = command_processing_write,
-    },
+    // {
+    //     .state = COMMAND_PROCESSING,
+    //     .on_arrival = open_mail,
+    // },
     {
         .state = DONE,
         .on_arrival = done_arrival,
@@ -64,5 +64,7 @@ static const struct state_definition client_statbl[] = {
         .on_write_ready = error_write
     },
 };
+
+void register_fd(struct selector_key* key, int fd, fd_interest interest, void * data);
 
 #endif

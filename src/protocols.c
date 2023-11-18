@@ -84,7 +84,7 @@ pop3_write(struct selector_key* key)
 static void
 pop3_close(struct selector_key* key)
 {
-    free_client(ATTACHMENT(key));
+    // free_client(ATTACHMENT(key));
 }
 
 // static void
@@ -100,3 +100,7 @@ pop3_close(struct selector_key* key)
 //     }
 //     // Free
 // }
+
+void register_fd(struct selector_key* key, int fd, fd_interest interest, void * data) {
+    selector_register(key->s, fd, &pop3_handler, interest, data);
+}

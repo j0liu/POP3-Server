@@ -107,10 +107,10 @@ void buffer_init(buffer* b, const size_t n, uint8_t* data);
  * Se debe notificar mediante la función `buffer_write_adv'
  */
 uint8_t* buffer_write_ptr(buffer* b, size_t* nbyte);
-void buffer_write_adv(buffer* b, const ssize_t bytes);
+uint8_t * buffer_write_adv(buffer* b, const ssize_t bytes);
 
 uint8_t* buffer_read_ptr(buffer* b, size_t* nbyte);
-void buffer_read_adv(buffer* b, const ssize_t bytes);
+uint8_t * buffer_read_adv(buffer* b, const ssize_t bytes);
 
 /**
  * obtiene un byte
@@ -136,4 +136,5 @@ bool buffer_can_read(buffer* b);
 /** retorna true si se pueden escribir bytes en el buffer */
 bool buffer_can_write(buffer* b);
 
+ssize_t buffer_ncopy(buffer* b, uint8_t *source, ssize_t n);
 #endif

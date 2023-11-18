@@ -16,6 +16,9 @@
 
 #define ARG_MAX_LENGTH 255
 
+#define NO_EMAIL -1
+#define EMAIL_FINISHED 0
+
 typedef struct Client Client;
 
 typedef struct CommandState {
@@ -34,6 +37,10 @@ typedef struct ClientData {
     int mail_count_not_deleted;
     time_t last_activity_time;
     CommandState command_state;
+    int mail_fd; 
+    int current_mail;
+    buffer mail_buffer;
+    bool byte_stuffing;
 } ClientData;
 
 typedef struct CommandDescription {
