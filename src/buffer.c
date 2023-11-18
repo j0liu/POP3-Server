@@ -111,3 +111,11 @@ ssize_t buffer_ncopy(buffer* b, uint8_t *source, ssize_t n) {
     b->write += bytes;
     return bytes; 
 }
+
+size_t buffer_get_write_len(buffer* b) {
+    return b->limit - b->write;
+}
+
+size_t buffer_get_read_len(buffer* b) {
+    return b->write - b->read;
+}

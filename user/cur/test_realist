@@ -1,0 +1,15 @@
+Return-Path: <joliu@xd.com>
+X-Original-To: joliu@foo.pdc
+Delivered-To: joliu@foo.pdc
+Received: from xd (localhost [IPv6:::1])
+	by foo.pdc (Postfix) with ESMTP id B093D801F8
+	for <joliu@foo.pdc>; Tue, 29 Aug 2023 18:20:14 -0300 (-03)
+Message-Id: <20230829212029.B093D801F8@foo.pdc>
+Date: Tue, 29 Aug 2023 18:20:14 -0300 (-03)
+From: joliu@xd.com
+
+hola
+hola
+hola
+hola
+chau

@@ -137,4 +137,8 @@ bool buffer_can_read(buffer* b);
 bool buffer_can_write(buffer* b);
 
 ssize_t buffer_ncopy(buffer* b, uint8_t *source, ssize_t n);
+
+size_t buffer_get_write_len(buffer* b);
+
+size_t buffer_get_read_len(buffer* b);
 #endif

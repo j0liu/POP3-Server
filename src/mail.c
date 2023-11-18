@@ -45,8 +45,6 @@ int count_mails(const char* directory_path)
 void free_mail_info_list(MailInfo* mail_info_list, int size)
 {
     for (int i = 0; i < size; i++) {
-        flock(mail_info_list[i].file_descriptor, LOCK_UN); // Unlock the file
-        close(mail_info_list[i].file_descriptor); // Close the file descriptor
         free(mail_info_list[i].filename); // Free the filename string
     }
     free(mail_info_list); // Free the array itself
@@ -96,23 +94,12 @@ MailInfo* get_mail_info_list(const char* directory_path, int* size, const char* 
             snprintf(filepath, MAX_PATH_LENGTH, "%s/%s", directories[i], entry->d_name);
 
             if (stat(filepath, &file_stat) == 0 && is_regular_file(filepath)) {
-                int fd = open(filepath, O_RDONLY);
-                if (fd == -1) {
-                    free_mail_info_list(mail_info_list, index - 1);
-                    return NULL;
-                }
-                if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
-                    free_mail_info_list(mail_info_list, index - 1);
-                    close(fd);
-                    return NULL;
-                }
 
                 // Allocate and copy filename
                 mail_info_list[index].filename = malloc(strlen(filepath) + 1);
                 strcpy(mail_info_list[index].filename, filepath);
                 mail_info_list[index].size = file_stat.st_size;
                 mail_info_list[index].deleted = false;
-                mail_info_list[index].file_descriptor = fd;
                 index++;
             }
         }

@@ -23,6 +23,7 @@ ClientData* initialize_client_data(SocketData* socket_data)
     client_data->last_activity_time = time(NULL);
     client_data->byte_stuffing = false;
     client_data->current_mail = NO_EMAIL;
+    client_data->mail_fd = -1;
     buffer_init(&client_data->mail_buffer, 1024, malloc(1024)); // TODO: constantes
     return client_data;
 }

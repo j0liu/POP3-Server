@@ -206,6 +206,9 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         }
 
         num = first_argument_to_int(client_data, commandParameters);
+        if (num == -1) {
+            return ERROR;
+        }
         client_data->current_mail = num;
         client_data->byte_stuffing = true;
 
@@ -216,7 +219,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->current_mail = num;
 
         // Aca iria algo de la transformacion...?
-        client_data->mail_fd = client_data->mail_info_list[num - 1].file_descriptor; 
+        client_data->mail_fd = open(client_data->mail_info_list[num - 1].filename, O_RDONLY); 
 
         // char initial_message[50] = { 0 };
         // socket_buffer_write(client_data->socket_data, initial_message, len);
@@ -226,11 +229,11 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         buffer_write_adv(&(client_data->socket_data->write_buffer), len);
         return REGISTER_PENDING;
     }  else if (num == EMAIL_FINISHED) {
-
-        // Close the file?
-
+        close(client_data->mail_fd);
+        printf("closing mail\n");
         // Send terminating sequence
         client_data->current_mail = NO_EMAIL;
+        client_data->mail_fd = -1;
         client_data->byte_stuffing = false;
         socket_buffer_write(client_data->socket_data, RETR_TERMINATION, sizeof RETR_TERMINATION - 1);
         return COMMAND_READ;
@@ -482,55 +485,52 @@ unsigned command_write(struct selector_key* key)
     
     if (client_data->byte_stuffing && buffer_can_write(&(client_data->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer))) {
         printf("Byte stuffing\n");
-        size_t len = 0;
-        size_t mailLen = 0;
-        uint8_t * mbPtr = buffer_read_ptr(&(client_data->mail_buffer), &mailLen);
+        size_t mail_len = 0;
+        uint8_t * mbPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
         // uint8_t * writeBufferWritePtr = buffer_write_ptr(&(client_data->socket_data->write_buffer), &len);
 
         uint8_t * newline;
         do {
-            printf("Stuffing those bytes yeah l%ld\n", len);
-            newline = memchr(mbPtr, '\n', mailLen);
+            printf("Stuffing those bytes yeah\n");
+            newline = memchr(mbPtr, '\n', mail_len);
 
             if (newline != NULL) {
                 size_t offset = newline - mbPtr;
                 ssize_t copied = buffer_ncopy(&(client_data->socket_data->write_buffer), mbPtr, offset); // Excluimos el \n para mantener el contexto
                 mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
-                len -= copied;
-                mailLen -= copied;
-                if ( (mailLen == 1) ||
-                    (mailLen == 2 && newline && newline[1] == '.') || 
-                    (mailLen == 3 && newline && newline[1] == '.' && newline[2] == '\r')) {
+                size_t write_capacity = buffer_get_write_len(&(client_data->socket_data->write_buffer));;
+                printf("copying to buffer m%ld c%ld b%ld\n", mail_len, copied, write_capacity);
+                mail_len -= copied;
+                if (mail_len == 1) {
                         printf("Waiting to stuff?\n");
                         // Casos caos
                     break;
-                } else if (mailLen >= 4 && newline && newline[1] == '.' && newline[2] == '\r' && newline[3] == '\n') {
-                   if (len > 4)  {                                
-                        printf("Stuffed\n");
+                } else if (mail_len >= 2 && newline && newline[1] == '.') {
+                   if (write_capacity > 2) {                                
+                       printf("Stuffed\n");
                        buffer_write(&(client_data->socket_data->write_buffer), '\n');
                        buffer_write(&(client_data->socket_data->write_buffer), '.');
                        buffer_write(&(client_data->socket_data->write_buffer), '.');
-                       buffer_write(&(client_data->socket_data->write_buffer), '\r');
-                       mbPtr = buffer_read_adv(&(client_data->mail_buffer), 3);
-                       mailLen -= 3;
+                       mbPtr = buffer_read_adv(&(client_data->mail_buffer), 2);
+                       mail_len -= 2;
                    } else {
                      break;
                    }
                 } else {
-                    if (len > 0) {
+                    if (write_capacity > 0) {
                         printf("Fake\n");
                         buffer_write(&(client_data->socket_data->write_buffer), '\n');
                         mbPtr = buffer_read_adv(&(client_data->mail_buffer), 1);
-                        mailLen -= 1;
+                        mail_len -= 1;
                     } else {
                         break;
                     }
                 }
             } else { 
                 printf("No stuff\n");
-                ssize_t copied = buffer_ncopy(&(client_data->socket_data->write_buffer), mbPtr, mailLen);
+                ssize_t copied = buffer_ncopy(&(client_data->socket_data->write_buffer), mbPtr, mail_len);
                 mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
-                mailLen -= copied;
+                mail_len -= copied;
             }
         } while(newline != NULL && buffer_can_write(&(client_data->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer)));
     }
@@ -548,22 +548,32 @@ unsigned command_write(struct selector_key* key)
 
     if (client_data->current_mail != NO_EMAIL/* && buffer_can_write(&client_data->mail_buffer)*/) {
         printf("reading mail\n");
-        size_t mailLen;
-        uint8_t* mbPtr = buffer_write_ptr(&(client_data->mail_buffer), &mailLen);
+        size_t mail_len;
+        uint8_t* mbPtr = buffer_write_ptr(&(client_data->mail_buffer), &mail_len);
         ssize_t read_count = read(client_data->mail_fd, mbPtr, len);
         printf("mail read %ld \n", read_count);
         if (read_count < 0) {
             return ERROR;
         } else if (read_count == 0) {
             printf("Didnt read anything\n");
+            if (buffer_can_read(&(client_data->mail_buffer))) {
+                size_t mail_len;
+                uint8_t * mrPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
+                ssize_t copied = buffer_ncopy(&(client_data->socket_data->write_buffer), mrPtr, mail_len);
+                buffer_read_adv(&(client_data->mail_buffer), copied);
+                if (copied < (ssize_t) mail_len) {
+                   // TODO: Como podemos manejar esto???? 
+                   return COMMAND_WRITE;
+                }
+            }
+            
             selector_unregister_fd(key->s, client_data->mail_fd);
             client_data->current_mail = EMAIL_FINISHED;
-            client_data->byte_stuffing = false;
-            // TODO: Cerrar fd?
-            // close(key->fd);
         } 
         buffer_write_adv(&(client_data->mail_buffer), read_count);
     }
+
+    //HANDLE INTERESTS
 
     if (client_data->command_state.finished && !buffer_can_read(&(client_data->socket_data->write_buffer))) {
         client_data->command_state.command_index = -1;
