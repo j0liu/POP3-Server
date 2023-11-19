@@ -29,14 +29,9 @@ typedef struct CommandState {
 } CommandState;
 
 typedef struct ClientData {
-    SocketData* socket_data;
-    uint8_t state;
-    struct users* user;
     MailInfo* mail_info_list;
     int mail_count;
     int mail_count_not_deleted;
-    time_t last_activity_time;
-    CommandState command_state;
     int mail_fd; 
     int current_mail;
     buffer mail_buffer;
@@ -60,16 +55,21 @@ struct Client {
     struct state_machine stm;
     ClientData* client_data;
     parser* pop3parser;
+    
+    SocketData* socket_data;
+    uint8_t state;
+    struct users* user;
+    time_t last_activity_time;
 
-    // CommandState* command_st;
+    // TODO: Ver si es mejor un CommandState * 
+    CommandState command_state;
 };
 
 #define ATTACHMENT(key) ((Client*)(key)->data)
 
-ClientData* initialize_client_data(SocketData* socket_data);
 void free_client_data(ClientData* client_data);
 
-Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t client_addr_len);
+Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t client_addr_len, bool pop3);
 void free_client(Client* client);
 
 #endif

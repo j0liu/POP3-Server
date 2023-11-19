@@ -5,22 +5,15 @@
 
 #include "client.h"
 
-ClientData* initialize_client_data(SocketData* socket_data)
+static ClientData* initialize_pop3_client_data()
 {
-    if (socket_data == NULL) {
-        return NULL;
-    }
     ClientData* client_data = malloc(sizeof(*client_data));
     if (client_data == NULL) {
         return NULL;
     }
-    client_data->socket_data = socket_data;
-    client_data->state = AUTHORIZATION;
-    client_data->user = NULL;
     client_data->mail_info_list = NULL;
     client_data->mail_count = 0;
     client_data->mail_count_not_deleted = 0;
-    client_data->last_activity_time = time(NULL);
     client_data->byte_stuffing = false;
     client_data->current_mail = NO_EMAIL;
     client_data->mail_fd = -1;
@@ -28,13 +21,16 @@ ClientData* initialize_client_data(SocketData* socket_data)
     return client_data;
 }
 
+
+
+
 void free_client_data(ClientData* client_data)
 {
-    free_socket_data(client_data->socket_data);
+    // free_socket_data(client_data->socket_data);
     free(client_data);
 }
 
-Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t client_addr_len)
+Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t client_addr_len, bool pop3)
 {
     Client* client = malloc(sizeof(Client));
     if (client == NULL) {
@@ -58,11 +54,22 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
     extern parser_definition pop3_parser_definition;
     client->pop3parser = parser_init(&pop3_parser_definition);
 
-    client->client_data = initialize_client_data(initialize_socket_data(client_fd));
-    if (client->client_data == NULL) {
-        //Free de collection quizas?
-        free(client);
-        return NULL;
+    client->socket_data = initialize_socket_data(client_fd); 
+    client->state = AUTHORIZATION;
+    client->user = NULL;
+    client->last_activity_time = time(NULL);
+
+    client->command_state.command_index = -1;
+    client->command_state.argLen = 0;
+    client->command_state.finished = true;
+
+    if (pop3) {
+        client->client_data = initialize_pop3_client_data();
+        if (client->client_data == NULL) {
+            //Free de collection quizas?
+            free(client);
+            return NULL;
+        }
     }
 
     return client;
@@ -72,6 +79,7 @@ void free_client(Client* client)
 {
     free_client_data(client->client_data);
     free(client->connection);
+    free(client->socket_data);
     parser_destroy(client->pop3parser);
     free(client);
     

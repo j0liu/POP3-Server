@@ -33,31 +33,31 @@ extern Args args;
 
 static int capa_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
-    ClientData* client_data = client->client_data;
-    if (client_data->state == AUTHORIZATION) {
+    //ClientData* client_data = client->client_data;
+    if (client->state == AUTHORIZATION) {
         // TODO: Manejar escrituras 
-        socket_buffer_write(client_data->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1); 
+        socket_buffer_write(client->socket_data, CAPA_MSG_AUTHORIZATION, sizeof CAPA_MSG_AUTHORIZATION - 1); 
     } else {
-        socket_buffer_write(client_data->socket_data, CAPA_MSG_TRANSACTION, sizeof CAPA_MSG_TRANSACTION - 1);
+        socket_buffer_write(client->socket_data, CAPA_MSG_TRANSACTION, sizeof CAPA_MSG_TRANSACTION - 1);
     }
-    client_data->command_state.finished = true; 
+    client->command_state.finished = true; 
     return COMMAND_WRITE; 
 }
 
 static int quit_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
     ClientData* client_data = client->client_data;
-    if (client_data->state == AUTHORIZATION) {
-        socket_buffer_write(client_data->socket_data, OK_QUIT_NO_AUTH, sizeof OK_QUIT_NO_AUTH - 1);
+    if (client->state == AUTHORIZATION) {
+        socket_buffer_write(client->socket_data, OK_QUIT_NO_AUTH, sizeof OK_QUIT_NO_AUTH - 1);
         return DONE;
     }
 
-    client_data->state = UPDATE;
+    client->state = UPDATE;
 
     for (int i = 0; i < client_data->mail_count; i++) {
         if (client_data->mail_info_list[i].deleted) {
             if (remove(client_data->mail_info_list[i].filename) != 0) {
-                socket_buffer_write(client_data->socket_data, NOT_REMOVED, sizeof NOT_REMOVED - 1);
+                socket_buffer_write(client->socket_data, NOT_REMOVED, sizeof NOT_REMOVED - 1);
                 free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
                 return ERROR;
             }
@@ -65,11 +65,11 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
     }
 
     if (client_data->mail_count_not_deleted == 0) {
-        socket_buffer_write(client_data->socket_data, OK_QUIT_EMPTY, sizeof OK_QUIT_EMPTY - 1);
+        socket_buffer_write(client->socket_data, OK_QUIT_EMPTY, sizeof OK_QUIT_EMPTY - 1);
     } else {
         char buff[100] = { 0 }; // TODO: Improve
         int len = sprintf(buff, OK_QUIT, client_data->mail_count_not_deleted);
-        socket_buffer_write(client_data->socket_data, buff, len);
+        socket_buffer_write(client->socket_data, buff, len);
     }
 
     free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
@@ -79,52 +79,52 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
 
 static int user_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
-    ClientData* client_data = client->client_data;
+    //ClientData* client_data = client->client_data;
     for (int i = 0; i < (int)args.quantity_users; i++) {
         if (strncmp(args.users[i].name, commandParameters, parameters_length) == 0 && args.users[i].name[parameters_length] == '\0') {
-            socket_buffer_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
-            client_data->user = &args.users[i];
-            client_data->command_state.finished = true; 
+            socket_buffer_write(client->socket_data, OKCRLF, sizeof OKCRLF - 1);
+            client->user = &args.users[i];
+            client->command_state.finished = true; 
             return COMMAND_WRITE; 
         }
     }
-    client_data->command_state.finished = true; 
-    socket_buffer_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
+    client->command_state.finished = true; 
+    socket_buffer_write(client->socket_data, OKCRLF, sizeof OKCRLF - 1);
     return COMMAND_WRITE; 
 }
 
 static int pass_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
     ClientData* client_data = client->client_data;
-    if (client_data->user == NULL) {
-        socket_buffer_write(client_data->socket_data, NO_USERNAME_GIVEN, sizeof NO_USERNAME_GIVEN - 1);
+    if (client->user == NULL) {
+        socket_buffer_write(client->socket_data, NO_USERNAME_GIVEN, sizeof NO_USERNAME_GIVEN - 1);
         return ERROR;
     }
-    if (strcmp(client_data->user->pass, commandParameters) == 0) {
-        client_data->state = TRANSACTION;
-        client_data->mail_info_list = get_mail_info_list(args.maildir_path, &client_data->mail_count, client_data->user->name);
+    if (strcmp(client->user->pass, commandParameters) == 0) {
+        client->state = TRANSACTION;
+        client_data->mail_info_list = get_mail_info_list(args.maildir_path, &client_data->mail_count, client->user->name);
         // if (client_data->mail_info_list == NULL) {
             // socket_buffer_write(client_data->socket_data, ERR_LOCKED_MAILDROP, sizeof ERR_LOCKED_MAILDROP - 1);
             // free_client_data(client_data);
             // return C; 
         // }
-        socket_buffer_write(client_data->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
+        socket_buffer_write(client->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->mail_count_not_deleted = client_data->mail_count;
-        client_data->command_state.finished = true; 
+        client->command_state.finished = true; 
         return COMMAND_WRITE; 
     }
-    socket_buffer_write(client_data->socket_data, AUTH_FAILED, sizeof AUTH_FAILED - 1);
-    client_data->command_state.finished = true; 
+    socket_buffer_write(client->socket_data, AUTH_FAILED, sizeof AUTH_FAILED - 1);
+    client->command_state.finished = true; 
     return COMMAND_WRITE; 
 }
 
-static int first_argument_to_int(ClientData* client_data, char* commandParameters)
+static int first_argument_to_int(Client* client, char* commandParameters)
 {
     char* endptr;
     int num = -1, len;
     if (commandParameters != NULL) {
         num = strtol(commandParameters, &endptr, 10);
-        if (num > 0 && num <= client_data->mail_count && *endptr == '\0' && endptr != commandParameters) {
+        if (num > 0 && num <= client->client_data->mail_count && *endptr == '\0' && endptr != commandParameters) {
             return num;
         }
     }
@@ -133,10 +133,10 @@ static int first_argument_to_int(ClientData* client_data, char* commandParameter
         len = sprintf(buff, ERR_INVALID_NUMBER, commandParameters != NULL ? commandParameters : "");
     } else if (*endptr != '\0') {
         len = sprintf(buff, ERR_NOISE, endptr);
-    } else if (num > client_data->mail_count) {
+    } else if (num > client->client_data->mail_count) {
         len = sprintf(buff, NO_MESSAGE_LIST, num);
     }
-    socket_buffer_write(client_data->socket_data, buff, len);
+    socket_buffer_write(client->socket_data, buff, len);
     return -1;
 }
 
@@ -153,8 +153,8 @@ static int stat_handler(Client* client, char* commandParameters, uint8_t paramet
     }
     char buff[100] = { 0 }; // TODO: Improve
     int len = sprintf(buff, OK " %d %ld" CRLF, count, size);
-    socket_buffer_write(client_data->socket_data, buff, len);
-    client_data->command_state.finished = true; 
+    socket_buffer_write(client->socket_data, buff, len);
+    client->command_state.finished = true; 
     return COMMAND_WRITE;
 }
 
@@ -169,23 +169,23 @@ static int list_handler(Client* client, char* commandParameters, uint8_t paramet
 
     if (parameters_length == 0) {
         int len = sprintf(buff, OK_LIST, client_data->mail_count_not_deleted);
-        socket_buffer_write(client_data->socket_data, buff, len);
+        socket_buffer_write(client->socket_data, buff, len);
 
         for (int i = 0; i < client_data->mail_count; i++) {
             if (!client_data->mail_info_list[i].deleted) {
                 int len = sprintf(buff, "%d %ld" CRLF, i + 1, client_data->mail_info_list[i].size);
-                socket_buffer_write(client_data->socket_data, buff, len);
+                socket_buffer_write(client->socket_data, buff, len);
             }
         }
-        socket_buffer_write(client_data->socket_data, TERMINATION, sizeof TERMINATION - 1);
+        socket_buffer_write(client->socket_data, TERMINATION, sizeof TERMINATION - 1);
     } else {
-        int num = first_argument_to_int(client_data, commandParameters);
+        int num = first_argument_to_int(client, commandParameters);
         if (num > 0) {
             int len = sprintf(buff, OK " %d %ld" CRLF, num, client_data->mail_info_list[num - 1].size);
-            socket_buffer_write(client_data->socket_data, buff, len);
+            socket_buffer_write(client->socket_data, buff, len);
         }
     }
-    client_data->command_state.finished = true; 
+    client->command_state.finished = true; 
     return COMMAND_WRITE;
 }
 
@@ -201,11 +201,11 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         }
 
         if (parameters_length == 0) {
-            socket_buffer_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
+            socket_buffer_write(client->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
             return ERROR; 
         }
 
-        num = first_argument_to_int(client_data, commandParameters);
+        num = first_argument_to_int(client, commandParameters);
         if (num == -1) {
             return ERROR;
         }
@@ -213,7 +213,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->byte_stuffing = true;
 
         if (client_data->mail_info_list[num - 1].deleted) {
-            socket_buffer_write(client_data->socket_data, MESSAGE_IS_DELETED, sizeof MESSAGE_IS_DELETED - 1);
+            socket_buffer_write(client->socket_data, MESSAGE_IS_DELETED, sizeof MESSAGE_IS_DELETED - 1);
             return ERROR; 
         }
         client_data->current_mail = num;
@@ -224,9 +224,9 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         // char initial_message[50] = { 0 };
         // socket_buffer_write(client_data->socket_data, initial_message, len);
         size_t bufferLen = 0;
-        uint8_t * ptr = buffer_write_ptr(&(client_data->socket_data->write_buffer), &bufferLen);
+        uint8_t * ptr = buffer_write_ptr(&(client->socket_data->write_buffer), &bufferLen);
         int len = sprintf((char *) ptr, OK_OCTETS, client_data->mail_info_list[num - 1].size);
-        buffer_write_adv(&(client_data->socket_data->write_buffer), len);
+        buffer_write_adv(&(client->socket_data->write_buffer), len);
         return REGISTER_PENDING;
     }  else if (num == EMAIL_FINISHED) {
         close(client_data->mail_fd);
@@ -235,7 +235,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->current_mail = NO_EMAIL;
         client_data->mail_fd = -1;
         client_data->byte_stuffing = false;
-        socket_buffer_write(client_data->socket_data, RETR_TERMINATION, sizeof RETR_TERMINATION - 1);
+        socket_buffer_write(client->socket_data, RETR_TERMINATION, sizeof RETR_TERMINATION - 1);
         return COMMAND_READ;
     }
 
@@ -252,31 +252,31 @@ static int dele_handler(Client * client, char* commandParameters, uint8_t parame
     }
 
     if (parameters_length == 0) {
-        socket_buffer_write(client_data->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
+        socket_buffer_write(client->socket_data, NO_MSG_NUMBER_GIVEN, sizeof NO_MSG_NUMBER_GIVEN - 1);
         return ERROR;
     }
 
-    int num = first_argument_to_int(client_data, commandParameters);
+    int num = first_argument_to_int(client, commandParameters);
     if (num > 0) {
         if (client_data->mail_info_list[num - 1].deleted) {
-            socket_buffer_write(client_data->socket_data, MESSAGE_IS_DELETED, sizeof MESSAGE_IS_DELETED - 1);
+            socket_buffer_write(client->socket_data, MESSAGE_IS_DELETED, sizeof MESSAGE_IS_DELETED - 1);
         } else {
             client_data->mail_info_list[num - 1].deleted = true;
             client_data->mail_count_not_deleted--;
-            socket_buffer_write(client_data->socket_data, OK_DELE, sizeof OK_DELE - 1);
+            socket_buffer_write(client->socket_data, OK_DELE, sizeof OK_DELE - 1);
         }
     }
 
-    client_data->command_state.finished = true; 
+    client->command_state.finished = true; 
     return COMMAND_WRITE;    
 }
 
 static int noop_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
-    ClientData * client_data = client->client_data;
-    socket_buffer_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
+    //ClientData * client_data = client->client_data;
+    socket_buffer_write(client->socket_data, OKCRLF, sizeof OKCRLF - 1);
     
-    client_data->command_state.finished = true; 
+    client->command_state.finished = true; 
     return COMMAND_WRITE;
 }
 
@@ -287,8 +287,8 @@ static int rset_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->mail_info_list[i].deleted = false;
     }
     client_data->mail_count_not_deleted = client_data->mail_count;
-    socket_buffer_write(client_data->socket_data, OKCRLF, sizeof OKCRLF - 1);
-    client_data->command_state.finished = true; 
+    socket_buffer_write(client->socket_data, OKCRLF, sizeof OKCRLF - 1);
+    client->command_state.finished = true; 
     return COMMAND_WRITE;
 }
 
@@ -306,10 +306,10 @@ CommandDescription available_commands[] = {
 };
 
 
-static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
+static int consume_pop3_buffer(parser* pop3parser, SocketData* socket_data)
 {
-    for (; buffer_can_read(&client_data->socket_data->read_buffer);) {
-        const uint8_t c = socket_data_read(client_data->socket_data);
+    for (; buffer_can_read(&socket_data->read_buffer);) {
+        const uint8_t c = socket_data_read(socket_data);
         const parser_event* event = parser_feed(pop3parser, c);
         if (event == NULL) {
             return -1;
@@ -324,37 +324,37 @@ static int consume_pop3_buffer(parser* pop3parser, ClientData* client_data)
     return -1;
 }
 
-static bool process_event(parser_event* event, ClientData* client_data)
+static bool process_event(parser_event* event, Client* client)
 {
     // if (event->command_length + event->args_length > MAX_COMMAND_LENGTH) {
     //     socket_buffer_write(client_data->socket_data, ERR_COMMAND_TOO_LONG, sizeof ERR_COMMAND_TOO_LONG - 1);
     //     return FINISH_CONNECTION;
     // }
 
-    client_data->last_activity_time = time(NULL);
+    client->last_activity_time = time(NULL);
     for (int i = 0; i < (int)N(available_commands); i++) {
         if (event->command_length == 4 && strncasecmp(event->command, available_commands[i].name, event->command_length) == 0) {
-            if ((client_data->state & available_commands[i].valid_states) == 0) {
+            if ((client->state & available_commands[i].valid_states) == 0) {
                 break;
             }
-            client_data->command_state.command_index = i;
-            client_data->command_state.argLen = event->args_length;
-            strcpy(client_data->command_state.arguments, event->args);
-            client_data->command_state.finished = false;
+            client->command_state.command_index = i;
+            client->command_state.argLen = event->args_length;
+            strcpy(client->command_state.arguments, event->args);
+            client->command_state.finished = false;
             return CONTINUE_CONNECTION;
         }
     }
 
-    socket_buffer_write(client_data->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
-    client_data->command_state.command_index = -1;
-    client_data->command_state.argLen = 0;
-    client_data->command_state.finished = false;
+    socket_buffer_write(client->socket_data, UNKNOWN_COMMAND, sizeof UNKNOWN_COMMAND - 1);
+    client->command_state.command_index = -1;
+    client->command_state.argLen = 0;
+    client->command_state.finished = false;
     return FINISH_CONNECTION; 
 }
 
 void welcome_init(const unsigned prev_state, const unsigned state, struct selector_key* key)
 {
-    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->write_buffer);
+    buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
 
     // Agregamos el mensaje de bienvenida
     size_t len = 0;
@@ -366,7 +366,7 @@ void welcome_init(const unsigned prev_state, const unsigned state, struct select
 void welcome_close(const unsigned state, struct selector_key* key)
 {
     /* CommandState* d = &ATTACHMENT(key).command_st; */
-    buffer *rb = &(ATTACHMENT(key)->client_data->socket_data->read_buffer), *wb = &(ATTACHMENT(key)->client_data->socket_data->write_buffer);
+    buffer *rb = &(ATTACHMENT(key)->socket_data->read_buffer), *wb = &(ATTACHMENT(key)->socket_data->write_buffer);
     buffer_reset(rb);
     buffer_reset(wb);
 }
@@ -374,7 +374,7 @@ void welcome_close(const unsigned state, struct selector_key* key)
 unsigned welcome_write(struct selector_key* key)
 {
     /* CommandState* d = &ATTACHMENT(key).command_st; */
-    buffer* wb = &(ATTACHMENT(key)->client_data->socket_data->write_buffer);
+    buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
     size_t len = 0;
     uint8_t* wbPtr = buffer_read_ptr(wb, &len);
     ssize_t sent_count = send(key->fd, wbPtr, len, MSG_NOSIGNAL);
@@ -411,9 +411,9 @@ void command_read_arrival(const unsigned prev_state, const unsigned state, struc
 unsigned command_read(struct selector_key* key)
 {
     Client * client = ATTACHMENT(key);
-    ClientData * client_data = client->client_data;
+    //ClientData * client_data = client->client_data;
 
-    buffer* rb = &client_data->socket_data->read_buffer;
+    buffer* rb = &client->socket_data->read_buffer;
     size_t len;
     uint8_t *rbPtr = buffer_write_ptr(rb, &len);
     ssize_t read_count = recv(key->fd, rbPtr, len, 0); // TODO: Ver flags?
@@ -435,11 +435,11 @@ unsigned command_read(struct selector_key* key)
         // }
         //printf("buffer_can_read: %d\n", buffer_can_read(&client_data->socket_data->read_buffer));
 
-        if (consume_pop3_buffer(client->pop3parser, client_data) == 0) {
+        if (consume_pop3_buffer(client->pop3parser, client->socket_data) == 0) {
 
             parser_event* event = parser_pop_event(client->pop3parser);
             if (event != NULL) {
-                result = process_event(event, client_data);
+                result = process_event(event, client);
                 free(event);
                 parser_reset(client->pop3parser);
                 if (result == CONTINUE_CONNECTION) {
@@ -472,7 +472,7 @@ unsigned command_write(struct selector_key* key)
     printf("arrived to write\n");
     Client * client = ATTACHMENT(key);
     ClientData * client_data = client->client_data;
-    CommandState * command_state = &client_data->command_state;
+    CommandState * command_state = &client->command_state;
     
     int result_state = -1;
     if (command_state->command_index != -1) {
@@ -483,7 +483,7 @@ unsigned command_write(struct selector_key* key)
         }
     }
     
-    if (client_data->byte_stuffing && buffer_can_write(&(client_data->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer))) {
+    if (client_data->byte_stuffing && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer))) {
         printf("Byte stuffing\n");
         size_t mail_len = 0;
         uint8_t * mbPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
@@ -496,9 +496,9 @@ unsigned command_write(struct selector_key* key)
 
             if (newline != NULL) {
                 size_t offset = newline - mbPtr;
-                ssize_t copied = buffer_ncopy(&(client_data->socket_data->write_buffer), mbPtr, offset); // Excluimos el \n para mantener el contexto
+                ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, offset); // Excluimos el \n para mantener el contexto
                 mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
-                size_t write_capacity = buffer_get_write_len(&(client_data->socket_data->write_buffer));;
+                size_t write_capacity = buffer_get_write_len(&(client->socket_data->write_buffer));;
                 printf("copying to buffer m%ld c%ld b%ld\n", mail_len, copied, write_capacity);
                 mail_len -= copied;
                 if (mail_len == 1) {
@@ -508,9 +508,9 @@ unsigned command_write(struct selector_key* key)
                 } else if (mail_len >= 2 && newline && newline[1] == '.') {
                    if (write_capacity > 2) {                                
                        printf("Stuffed\n");
-                       buffer_write(&(client_data->socket_data->write_buffer), '\n');
-                       buffer_write(&(client_data->socket_data->write_buffer), '.');
-                       buffer_write(&(client_data->socket_data->write_buffer), '.');
+                       buffer_write(&(client->socket_data->write_buffer), '\n');
+                       buffer_write(&(client->socket_data->write_buffer), '.');
+                       buffer_write(&(client->socket_data->write_buffer), '.');
                        mbPtr = buffer_read_adv(&(client_data->mail_buffer), 2);
                        mail_len -= 2;
                    } else {
@@ -519,7 +519,7 @@ unsigned command_write(struct selector_key* key)
                 } else {
                     if (write_capacity > 0) {
                         printf("Fake\n");
-                        buffer_write(&(client_data->socket_data->write_buffer), '\n');
+                        buffer_write(&(client->socket_data->write_buffer), '\n');
                         mbPtr = buffer_read_adv(&(client_data->mail_buffer), 1);
                         mail_len -= 1;
                     } else {
@@ -528,21 +528,21 @@ unsigned command_write(struct selector_key* key)
                 }
             } else { 
                 printf("No stuff\n");
-                ssize_t copied = buffer_ncopy(&(client_data->socket_data->write_buffer), mbPtr, mail_len);
+                ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, mail_len);
                 mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
                 mail_len -= copied;
             }
-        } while(newline != NULL && buffer_can_write(&(client_data->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer)));
+        } while(newline != NULL && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer)));
     }
 
     size_t len = 0;
     ssize_t sent_count = 0;
-    uint8_t* wbPtr = buffer_read_ptr(&(client_data->socket_data->write_buffer), &len);
+    uint8_t* wbPtr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
     if (len > 0) {
         printf("sending to client\n");
-        sent_count = send(client_data->socket_data->fd, wbPtr, len, MSG_NOSIGNAL);
+        sent_count = send(client->socket_data->fd, wbPtr, len, MSG_NOSIGNAL);
         if (sent_count == -1) return ERROR;
-        buffer_read_adv(&(client_data->socket_data->write_buffer), sent_count);
+        buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
     }
 
 
@@ -559,7 +559,7 @@ unsigned command_write(struct selector_key* key)
             if (buffer_can_read(&(client_data->mail_buffer))) {
                 size_t mail_len;
                 uint8_t * mrPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
-                ssize_t copied = buffer_ncopy(&(client_data->socket_data->write_buffer), mrPtr, mail_len);
+                ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mrPtr, mail_len);
                 buffer_read_adv(&(client_data->mail_buffer), copied);
                 if (copied < (ssize_t) mail_len) {
                    // TODO: Como podemos manejar esto???? 
@@ -575,10 +575,10 @@ unsigned command_write(struct selector_key* key)
 
     //HANDLE INTERESTS
 
-    if (client_data->command_state.finished && !buffer_can_read(&(client_data->socket_data->write_buffer))) {
-        client_data->command_state.command_index = -1;
-        client_data->command_state.argLen = 0;
-        client_data->command_state.finished = false;
+    if (client->command_state.finished && !buffer_can_read(&(client->socket_data->write_buffer))) {
+        client->command_state.command_index = -1;
+        client->command_state.argLen = 0;
+        client->command_state.finished = false;
         // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
         //     return ERROR;
         // }
@@ -603,15 +603,15 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
 
 unsigned error_write(struct selector_key* key) {
     Client * client = ATTACHMENT(key);
-    ClientData * client_data = client->client_data;
+    //ClientData * client_data = client->client_data;
     size_t len = 0;
-    uint8_t* ptr = buffer_read_ptr(&(client_data->socket_data->write_buffer), &len);
+    uint8_t* ptr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
     ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
 
     if (sent_count == -1) return ERROR;
 
-    buffer_read_adv(&(client_data->socket_data->write_buffer), sent_count);
-    if (!buffer_can_read(&(client_data->socket_data->write_buffer))) {
+    buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
+    if (!buffer_can_read(&(client->socket_data->write_buffer))) {
         // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
         //     return ERROR;
         // }

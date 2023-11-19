@@ -18,13 +18,28 @@ static const struct fd_handler pop3_handler = {
     .handle_close = pop3_close,
 };
 
+static const struct fd_handler dajt_handler = {
+    .handle_read = NULL, 
+    .handle_write = NULL, 
+    .handle_block = NULL,
+    .handle_close = NULL, 
+};
+
+
+static void accept_passive_sockets(struct selector_key* key, const struct fd_handler * handler, bool pop3);
+
 void dajt_accept_passive_sockets(struct selector_key* key)
 {
-    printf("Not implemented yet\n");
+    accept_passive_sockets(key, &dajt_handler, false);
 }
+
 
 void pop3_accept_passive_sockets(struct selector_key* key)
 {
+    accept_passive_sockets(key, &pop3_handler, true);
+}
+
+static void accept_passive_sockets(struct selector_key* key, const struct fd_handler * handler, bool pop3) {
     struct sockaddr_in6 client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     const int client_fd = accept(key->fd, (struct sockaddr*)&client_addr, &client_addr_len);
@@ -37,7 +52,7 @@ void pop3_accept_passive_sockets(struct selector_key* key)
         goto fail;
     }
 
-    client = new_client(client_fd, &client_addr, client_addr_len);
+    client = new_client(client_fd, &client_addr, client_addr_len, pop3);
     if (client == NULL) {
         goto fail;
     }
