@@ -44,7 +44,7 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
     struct state_machine stm = {
         .initial = WELCOME,
         .max_state = ERROR,
-        .states = client_statbl,
+        .states = pop3 ? client_statbl_pop3 : client_statbl_dajt
     };
 
     client->stm = stm;

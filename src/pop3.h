@@ -49,6 +49,4 @@ unsigned command_write(struct selector_key* key);
 void command_write_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key);
 void done_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key);
 unsigned error_write(struct selector_key* key);
-void open_mail(const unsigned prev_state, const unsigned state, struct selector_key* key);
-unsigned command_processing_write(struct selector_key* key);
 #endif

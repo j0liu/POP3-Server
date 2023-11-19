@@ -357,12 +357,14 @@ void welcome_init(const unsigned prev_state, const unsigned state, struct select
     buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
 
     // Agregamos el mensaje de bienvenida
+    // Asumimos que el buffer no puede estar lleno en este punto
     size_t len = 0;
     uint8_t* ptr = buffer_write_ptr(wb, &len);
     strncpy((char*)ptr, SERVER_READY, len);
-    buffer_write_adv(wb, strlen(SERVER_READY));
+    buffer_write_adv(wb, sizeof SERVER_READY - 1);
 }
 
+// TODO: Ver de sacar?
 void welcome_close(const unsigned state, struct selector_key* key)
 {
     /* CommandState* d = &ATTACHMENT(key).command_st; */
@@ -373,7 +375,6 @@ void welcome_close(const unsigned state, struct selector_key* key)
 
 unsigned welcome_write(struct selector_key* key)
 {
-    /* CommandState* d = &ATTACHMENT(key).command_st; */
     buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
     size_t len = 0;
     uint8_t* wbPtr = buffer_read_ptr(wb, &len);
@@ -403,7 +404,6 @@ unsigned welcome_write(struct selector_key* key)
 
 void command_read_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
     if(prev_state != state) {
-        // TODO: Manejar error (!= SELECTOR_SUCCESS)
         selector_set_interest(key->s, key->fd, OP_READ);
     }
 }
@@ -411,7 +411,6 @@ void command_read_arrival(const unsigned prev_state, const unsigned state, struc
 unsigned command_read(struct selector_key* key)
 {
     Client * client = ATTACHMENT(key);
-    //ClientData * client_data = client->client_data;
 
     buffer* rb = &client->socket_data->read_buffer;
     size_t len;
@@ -462,7 +461,6 @@ unsigned command_read(struct selector_key* key)
 
 void command_write_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
     if(prev_state != state) {
-        // TODO: Manejar error (!= SELECTOR_SUCCESS)
         selector_set_interest(key->s, key->fd, OP_WRITE);
     }
 }

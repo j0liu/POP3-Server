@@ -7,39 +7,31 @@
 #include "protocols.h"
 #include "selector.h"
 
-static void pop3_read(struct selector_key* key);
-static void pop3_write(struct selector_key* key);
-static void pop3_close(struct selector_key* key);
+static void stm_read(struct selector_key* key);
+static void stm_write(struct selector_key* key);
+static void stm_close(struct selector_key* key);
 
-static const struct fd_handler pop3_handler = {
-    .handle_read = pop3_read,
-    .handle_write = pop3_write,
+static const struct fd_handler stm_handler = {
+    .handle_read = stm_read,
+    .handle_write = stm_write,
     .handle_block = NULL,
-    .handle_close = pop3_close,
+    .handle_close = stm_close,
 };
 
-static const struct fd_handler dajt_handler = {
-    .handle_read = NULL, 
-    .handle_write = NULL, 
-    .handle_block = NULL,
-    .handle_close = NULL, 
-};
-
-
-static void accept_passive_sockets(struct selector_key* key, const struct fd_handler * handler, bool pop3);
+static void accept_passive_sockets(struct selector_key* key, bool pop3);
 
 void dajt_accept_passive_sockets(struct selector_key* key)
 {
-    accept_passive_sockets(key, &dajt_handler, false);
+    accept_passive_sockets(key, false);
 }
 
 
 void pop3_accept_passive_sockets(struct selector_key* key)
 {
-    accept_passive_sockets(key, &pop3_handler, true);
+    accept_passive_sockets(key, true);
 }
 
-static void accept_passive_sockets(struct selector_key* key, const struct fd_handler * handler, bool pop3) {
+static void accept_passive_sockets(struct selector_key* key, bool pop3) {
     struct sockaddr_in6 client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     const int client_fd = accept(key->fd, (struct sockaddr*)&client_addr, &client_addr_len);
@@ -57,7 +49,7 @@ static void accept_passive_sockets(struct selector_key* key, const struct fd_han
         goto fail;
     }
 
-    if (SELECTOR_SUCCESS != selector_register(key->s, client_fd, &pop3_handler, OP_WRITE, client)) {
+    if (SELECTOR_SUCCESS != selector_register(key->s, client_fd, &stm_handler, OP_WRITE, client)) {
         goto fail;
     }
 
@@ -73,7 +65,7 @@ fail:
 // son los que emiten los eventos a la maquina de estados.
 // static void pop3_done(struct selector_key* key);
 
-static void pop3_read(struct selector_key* key)
+static void stm_read(struct selector_key* key)
 {
     struct state_machine* stm = &ATTACHMENT(key)->stm;
     // const enum pop3_state st = 
@@ -85,7 +77,7 @@ static void pop3_read(struct selector_key* key)
 }
 
 static void
-pop3_write(struct selector_key* key)
+stm_write(struct selector_key* key)
 {
     struct state_machine* stm = &ATTACHMENT(key)->stm;
     // const enum pop3_state st = 
@@ -97,7 +89,7 @@ pop3_write(struct selector_key* key)
 }
 
 static void
-pop3_close(struct selector_key* key)
+stm_close(struct selector_key* key)
 {
     // free_client(ATTACHMENT(key));
 }
@@ -117,5 +109,5 @@ pop3_close(struct selector_key* key)
 // }
 
 void register_fd(struct selector_key* key, int fd, fd_interest interest, void * data) {
-    selector_register(key->s, fd, &pop3_handler, interest, data);
+    selector_register(key->s, fd, &stm_handler, interest, data);
 }
