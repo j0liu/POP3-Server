@@ -35,6 +35,7 @@ unsigned long total_connections = 0;
 unsigned long current_connections = 0;
 unsigned long total_bytes_sent = 0;
 unsigned long total_errors = 0;
+bool transformations_enabled = true;
 
 static int capa_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
@@ -224,7 +225,39 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->current_mail = num;
 
         // Aca iria algo de la transformacion...?
-        client_data->mail_fd = open(client_data->mail_info_list[num - 1].filename, O_RDONLY); 
+        client_data->mail_fd = open(client_data->mail_info_list[num - 1].filename, O_RDONLY);
+        
+        selector_fd_set_nio(client_data->mail_fd);
+        if (transformations_enabled) {
+            int pop3_to_transf_fds[2];
+            int transf_to_pop3_fds[2];
+            if (pipe(pop3_to_transf_fds) == -1)
+                return ERROR;
+            if (pipe(transf_to_pop3_fds) == -1)
+                return ERROR;
+            pid_t pid = fork();
+            if(pid == -1)
+                return ERROR;
+            if(pid == 0) {
+                //soy el transformador
+                dup2(pop3_to_transf_fds[0], STDIN_FILENO);
+                dup2(transf_to_pop3_fds[1], STDOUT_FILENO);
+                for (int fd = STDERR_FILENO + 1; fd <= transf_to_pop3_fds[1]; fd++)
+                    close(fd);
+                // char *const  param_list[] = {"transformer", NULL};
+                execle("/usr/bin/tr", "/usr/bin/tr", "aeiou", "i", NULL, NULL);
+                // execle("/usr/bin/cat", "cat", NULL, NULL);
+                // execve("./transformer", param_list, 0);
+                perror("execv");
+                exit(1);
+            }
+            close(pop3_to_transf_fds[0]); // TODO: Ver si puede fallar
+            close(transf_to_pop3_fds[1]);
+            client_data->pop3_to_transf_fd = pop3_to_transf_fds[1];
+            selector_fd_set_nio(client_data->pop3_to_transf_fd); // TODO: Ver si esta bien esto
+            client_data->transf_to_pop3_fd = transf_to_pop3_fds[0];
+            selector_fd_set_nio(client_data->transf_to_pop3_fd);
+        }
 
         // char initial_message[50] = { 0 };
         // socket_buffer_write(client_data->socket_data, initial_message, len);
@@ -240,8 +273,15 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->current_mail = NO_EMAIL;
         client_data->mail_fd = -1;
         client_data->byte_stuffing = false;
+        if (client_data->pop3_to_transf_fd != -1) {
+            close(client_data->pop3_to_transf_fd);
+            close(client_data->transf_to_pop3_fd);
+            client_data->pop3_to_transf_fd = -1;
+            client_data->transf_to_pop3_fd = -1;
+        }
+        
         socket_buffer_write(client->socket_data, RETR_TERMINATION, sizeof RETR_TERMINATION - 1);
-        return COMMAND_READ;
+        client->command_state.finished = true;
     }
 
     return COMMAND_WRITE;
@@ -472,125 +512,213 @@ void command_write_arrival(const unsigned prev_state, const unsigned state, stru
     }
 }
 
+static void register_mail_fds(struct selector_key* key, Client* client) {
+    register_fd(key, client->client_data->mail_fd, OP_READ, client);
+    if (transformations_enabled) {
+        register_fd(key, client->client_data->transf_to_pop3_fd, OP_READ, client);
+        register_fd(key, client->client_data->pop3_to_transf_fd, OP_WRITE, client);
+        // register_fd(key, client->client_data->pop3_to_transf_fd, OP_NOOP, client);
+        printf("registered pipes\n");
+    }
+} 
+
+static void mail_buffer_to_client_buffer(Client* client){
+    ClientData* client_data = client->client_data;
+    printf("Byte stuffing\n");
+    size_t mail_len = 0;
+    uint8_t * mbPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
+    // uint8_t * writeBufferWritePtr = buffer_write_ptr(&(client_data->socket_data->write_buffer), &len);
+
+    uint8_t * newline;
+    do {
+        newline = memchr(mbPtr, '\n', mail_len);
+
+        if (newline != NULL) {
+            size_t offset = newline - mbPtr;
+            ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, offset); // Excluimos el \n para mantener el contexto
+            mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
+            size_t write_capacity = buffer_get_write_len(&(client->socket_data->write_buffer));;
+            mail_len -= copied;
+            if (mail_len == 1) {
+                    // Casos caos
+                break;
+            } else if (mail_len >= 2 && newline && newline[1] == '.') {
+                if (write_capacity > 2) {
+                    buffer_write(&(client->socket_data->write_buffer), '\n');
+                    buffer_write(&(client->socket_data->write_buffer), '.');
+                    buffer_write(&(client->socket_data->write_buffer), '.');
+                    mbPtr = buffer_read_adv(&(client_data->mail_buffer), 2);
+                    mail_len -= 2;
+                } else {
+                    break;
+                }
+            } else {
+                if (write_capacity > 0) {
+                    buffer_write(&(client->socket_data->write_buffer), '\n');
+                    mbPtr = buffer_read_adv(&(client_data->mail_buffer), 1);
+                    mail_len -= 1;
+                } else {
+                    break;
+                }
+            }
+        } else { 
+            ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, mail_len);
+            mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
+            mail_len -= copied;
+        }
+    } while(newline != NULL && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer)));
+}
+
+static int mail_file_to_pipe(struct selector_key* key, Client* client) {
+    printf("reading mail to pipe\n");
+    ClientData * client_data = client->client_data;
+    uint8_t buff[1024] = {0}; // TODO: Poner una variable estatica con tamaño maximo del pipe?
+    ssize_t read_count = read(client_data->mail_fd, buff, 1024);
+    printf("Read %ld from mail\n", read_count);
+    if (read_count > 0) {
+        ssize_t written_count = write(client_data->pop3_to_transf_fd, buff, read_count);
+        if (written_count < read_count) {
+            if (written_count == -1) {
+                if (errno != EAGAIN) {
+                    perror("pipe write");
+                    return ERROR;
+                }
+                written_count = 0;
+            }
+            lseek(client_data->mail_fd, -(read_count - written_count), SEEK_CUR); // TODO: PREGUNTAR SI ESTO ESTA BIEN!
+            printf("rolling back %ld\n", -(read_count - written_count));
+            selector_set_interest(key->s, client_data->mail_fd, OP_NOOP);
+            selector_set_interest(key->s, client_data->pop3_to_transf_fd, OP_WRITE);
+        } else {
+            selector_set_interest(key->s, client_data->mail_fd, OP_READ);
+            selector_set_interest(key->s, client_data->pop3_to_transf_fd, OP_NOOP);
+        }
+    } else if(read_count == 0){
+        client_data->current_mail = EMAIL_READ_DONE; 
+        selector_unregister_fd(key->s, client_data->mail_fd);
+        close(client_data->mail_fd);
+        selector_unregister_fd(key->s, client_data->pop3_to_transf_fd);
+        close(client_data->pop3_to_transf_fd);
+        selector_set_interest(key->s, client_data->transf_to_pop3_fd, OP_READ);
+        return COMMAND_READ;
+    } else {
+        return ERROR;
+    }
+    return COMMAND_WRITE;
+}
+
+static int processed_mail_to_mail_buffer(struct selector_key* key, Client* client, int pre_byte_stuffing_fd) {
+    ClientData * client_data = client->client_data;
+    printf("reading processed mail \n");
+
+    size_t mail_len;
+    uint8_t* mbPtr = buffer_write_ptr(&(client_data->mail_buffer), &mail_len);
+
+    errno = 0;
+    ssize_t read_count = read(pre_byte_stuffing_fd, mbPtr, mail_len);
+    printf("read processed%ld \n", read_count);
+    if (read_count < 0) {
+        if (errno == EAGAIN) {
+            // selector_set_interest(key->s, pre_byte_stuffing_fd, OP_NOOP);
+            printf("EAGAIN\n");
+            return COMMAND_WRITE;
+        }
+        perror("read");
+        return ERROR;
+    } else if (read_count == 0) {
+        if (buffer_can_read(&(client_data->mail_buffer))) {
+            printf("Quedaron cosas por limpiar en el buffer\n");
+            size_t mail_len;
+            uint8_t * mrPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
+            ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mrPtr, mail_len);
+            buffer_read_adv(&(client_data->mail_buffer), copied);
+            if (copied < (ssize_t) mail_len) {
+            // TODO: Como podemos manejar esto???? 
+                return COMMAND_WRITE;
+            }
+        }
+
+        printf("Terminando...\n");
+        selector_unregister_fd(key->s, pre_byte_stuffing_fd);
+        client_data->current_mail = EMAIL_FINISHED;
+        selector_set_interest(key->s, client->socket_data->fd, OP_WRITE);
+    } else {
+        if (!buffer_can_read(&(client_data->mail_buffer))) {
+            printf("muting client socket, nothing to send\n");
+            if (selector_set_interest(key->s, client->socket_data->fd, OP_NOOP) != SELECTOR_SUCCESS) {
+                return ERROR;
+            }
+        }
+    }
+    buffer_write_adv(&(client_data->mail_buffer), read_count);
+    return COMMAND_WRITE;
+}
+
 unsigned command_write(struct selector_key* key)
 {
-    printf("arrived to write\n");
     Client * client = ATTACHMENT(key);
     ClientData * client_data = client->client_data;
     CommandState * command_state = &client->command_state;
+    printf("\narrived to write r:%d s:%d m:%d rp:%d wp:%d\n", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
     
     int result_state = -1;
     if (command_state->command_index != -1) {
+        printf("handling!!\n");
         result_state = available_commands[command_state->command_index].handler(client, command_state->arguments, command_state->argLen);
         if (result_state == REGISTER_PENDING) {
             result_state = COMMAND_WRITE;
-            register_fd(key, client_data->mail_fd, OP_READ, client);
+            register_mail_fds(key, client);
         }
+        printf("ended handling!!\n");
     }
-    
+
     if (client_data->byte_stuffing && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer))) {
-        printf("Byte stuffing\n");
-        size_t mail_len = 0;
-        uint8_t * mbPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
-        // uint8_t * writeBufferWritePtr = buffer_write_ptr(&(client_data->socket_data->write_buffer), &len);
-
-        uint8_t * newline;
-        do {
-            printf("Stuffing those bytes yeah\n");
-            newline = memchr(mbPtr, '\n', mail_len);
-
-            if (newline != NULL) {
-                size_t offset = newline - mbPtr;
-                ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, offset); // Excluimos el \n para mantener el contexto
-                mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
-                size_t write_capacity = buffer_get_write_len(&(client->socket_data->write_buffer));;
-                printf("copying to buffer m%ld c%ld b%ld\n", mail_len, copied, write_capacity);
-                mail_len -= copied;
-                if (mail_len == 1) {
-                        printf("Waiting to stuff?\n");
-                        // Casos caos
-                    break;
-                } else if (mail_len >= 2 && newline && newline[1] == '.') {
-                   if (write_capacity > 2) {                                
-                       printf("Stuffed\n");
-                       buffer_write(&(client->socket_data->write_buffer), '\n');
-                       buffer_write(&(client->socket_data->write_buffer), '.');
-                       buffer_write(&(client->socket_data->write_buffer), '.');
-                       mbPtr = buffer_read_adv(&(client_data->mail_buffer), 2);
-                       mail_len -= 2;
-                   } else {
-                     break;
-                   }
-                } else {
-                    if (write_capacity > 0) {
-                        printf("Fake\n");
-                        buffer_write(&(client->socket_data->write_buffer), '\n');
-                        mbPtr = buffer_read_adv(&(client_data->mail_buffer), 1);
-                        mail_len -= 1;
-                    } else {
-                        break;
-                    }
-                }
-            } else { 
-                printf("No stuff\n");
-                ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, mail_len);
-                mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
-                mail_len -= copied;
-            }
-        } while(newline != NULL && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer)));
+        mail_buffer_to_client_buffer(client);
+        selector_set_interest(key->s, client->socket_data->fd, OP_WRITE);
     }
 
-    size_t len = 0;
-    ssize_t sent_count = 0;
-    uint8_t* wbPtr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
-    if (len > 0) {
-        printf("sending to client\n");
 
+    if (buffer_can_read(&(client->socket_data->write_buffer))) {
+        size_t len = 0;
+        ssize_t sent_count = 0;
+        uint8_t* wbPtr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
+        printf("sending to client, can send %ld\n", len);
+
+        //TODO: ver si puede fallar el send si no es su turno
         sent_count = send(client->socket_data->fd, wbPtr, len, MSG_NOSIGNAL);
-        if (sent_count == -1) return ERROR;
+        printf("sent %ld\n", sent_count);
+        if (sent_count == -1) {
+        //  selector_set_interest(key->s, client->socket_data->fd, OP_NOOP);
+         return ERROR;
+        }
         buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
 
         // Estadistica de bytes transferidos
         total_bytes_sent += sent_count;
     }
 
+    if (client_data->current_mail != NO_EMAIL && client_data->current_mail != EMAIL_FINISHED) {
+        printf("mail section\n");
+        int pre_byte_stuffing_fd = client_data->pop3_to_transf_fd != -1 ? client_data->transf_to_pop3_fd : client_data->mail_fd;
+        if (client_data->pop3_to_transf_fd != -1) {
+            mail_file_to_pipe(key, client);
+        }
 
-    if (client_data->current_mail != NO_EMAIL/* && buffer_can_write(&client_data->mail_buffer)*/) {
-        printf("reading mail\n");
-        size_t mail_len;
-        uint8_t* mbPtr = buffer_write_ptr(&(client_data->mail_buffer), &mail_len);
-        ssize_t read_count = read(client_data->mail_fd, mbPtr, len);
-        printf("mail read %ld \n", read_count);
-        if (read_count < 0) {
-            return ERROR;
-        } else if (read_count == 0) {
-            printf("Didnt read anything\n");
-            if (buffer_can_read(&(client_data->mail_buffer))) {
-                size_t mail_len;
-                uint8_t * mrPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
-                ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mrPtr, mail_len);
-                buffer_read_adv(&(client_data->mail_buffer), copied);
-                if (copied < (ssize_t) mail_len) {
-                   // TODO: Como podemos manejar esto???? 
-                   return COMMAND_WRITE;
-                }
-            }
-            
-            selector_unregister_fd(key->s, client_data->mail_fd);
-            client_data->current_mail = EMAIL_FINISHED;
-        } 
-        buffer_write_adv(&(client_data->mail_buffer), read_count);
+        if (buffer_can_write(&client_data->mail_buffer)) {
+            processed_mail_to_mail_buffer(key, client, pre_byte_stuffing_fd);
+        }
     }
 
     //HANDLE INTERESTS
 
     if (client->command_state.finished && !buffer_can_read(&(client->socket_data->write_buffer))) {
+        printf("command finished, going to command read\n");
         client->command_state.command_index = -1;
         client->command_state.argLen = 0;
         client->command_state.finished = false;
-        // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-        //     return ERROR;
-        // }
+        if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+            return ERROR;
+        }
         return COMMAND_READ;
     }
     printf("exiting command write\n");

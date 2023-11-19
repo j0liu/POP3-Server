@@ -16,6 +16,7 @@
 
 #define ARG_MAX_LENGTH 255
 
+#define EMAIL_READ_DONE -2
 #define NO_EMAIL -1
 #define EMAIL_FINISHED 0
 
@@ -36,6 +37,8 @@ typedef struct ClientData {
     int current_mail;
     buffer mail_buffer;
     bool byte_stuffing;
+    int pop3_to_transf_fd;
+    int transf_to_pop3_fd;
 } ClientData;
 
 typedef struct CommandDescription {

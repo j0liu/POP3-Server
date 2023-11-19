@@ -19,6 +19,8 @@ static ClientData* initialize_pop3_client_data()
     client_data->byte_stuffing = false;
     client_data->current_mail = NO_EMAIL;
     client_data->mail_fd = -1;
+    client_data->pop3_to_transf_fd = -1;
+    client_data->transf_to_pop3_fd = -1;
     buffer_init(&client_data->mail_buffer, current_buffer_size, malloc(current_buffer_size)); 
     return client_data;
 }

@@ -13,6 +13,7 @@ extern unsigned long current_connections;
 extern unsigned long total_connections;
 extern unsigned long total_errors;
 extern unsigned current_buffer_size;
+extern bool transformations_enabled;
 
 #define MIN_BUFFER_SIZE 1 
 #define MAX_BUFFER_SIZE 1 << 20 
@@ -120,13 +121,25 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
     return DONE; 
 }
 
+static int ttra_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
+    socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
+    transformations_enabled = !transformations_enabled;
+    client->command_state.finished = true; 
+    return COMMAND_READ;
+}
+
+static int tran_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
+    socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
+    client->command_state.finished = true; 
+    return COMMAND_READ;
+}
 
 // AUTH user token
 
 CommandDescription dajt_available_commands[] = {
     { .name = "AUTH", .handler = auth_handler, .valid_states = AUTHORIZATION },
-    { .name = "TTRA", .handler = NULL, .valid_states = TRANSACTION },
-    { .name = "TRAN", .handler = NULL, .valid_states = TRANSACTION },
+    { .name = "TTRA", .handler = ttra_handler, .valid_states = TRANSACTION },
+    { .name = "TRAN", .handler = tran_handler, .valid_states = TRANSACTION },
     { .name = "BUFF", .handler = buff_handler, .valid_states = TRANSACTION },
     { .name = "STAT", .handler = stat_handler, .valid_states = TRANSACTION },
     { .name = "IDLE", .handler = NULL, .valid_states = TRANSACTION },
