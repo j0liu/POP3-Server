@@ -31,6 +31,11 @@ extern Args args;
 
 #define REGISTER_PENDING -2
 
+unsigned long total_connections = 0;
+unsigned long current_connections = 0;
+unsigned long total_bytes_sent = 0;
+unsigned long total_errors = 0;
+
 static int capa_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
     //ClientData* client_data = client->client_data;
@@ -355,6 +360,8 @@ static bool process_event(parser_event* event, Client* client)
 void welcome_init(const unsigned prev_state, const unsigned state, struct selector_key* key)
 {
     buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
+    total_connections++;
+    current_connections++;
 
     // Agregamos el mensaje de bienvenida
     // Asumimos que el buffer no puede estar lleno en este punto
@@ -384,8 +391,8 @@ unsigned welcome_write(struct selector_key* key)
         return ERROR;
     }
 
-    // Para las estadisticas, despues usar un struct
-    // bytes_sent += sent_count;
+    // Estadistica de bytes transferidos
+    total_bytes_sent += sent_count;
 
     buffer_read_adv(wb, sent_count);
     // Si no pude mandar el mensaje de bienvenida completo, vuelve a intentar
@@ -538,9 +545,13 @@ unsigned command_write(struct selector_key* key)
     uint8_t* wbPtr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
     if (len > 0) {
         printf("sending to client\n");
+
         sent_count = send(client->socket_data->fd, wbPtr, len, MSG_NOSIGNAL);
         if (sent_count == -1) return ERROR;
         buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
+
+        // Estadistica de bytes transferidos
+        total_bytes_sent += sent_count;
     }
 
 
@@ -588,15 +599,13 @@ unsigned command_write(struct selector_key* key)
 
 
 void done_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
-    // Client * client = ATTACHMENT(key);
-    // ClientData * client_data = client->client_data;
-    // CommandState * command_state = &client_data->command_state;
     printf("I'm done\n");
     free_client(ATTACHMENT(key));
     if (selector_unregister_fd(key->s, key->fd) != SELECTOR_SUCCESS) {
         // TODO: Ver si esto esta ok
         abort();
     }
+    current_connections--;
 }
 
 unsigned error_write(struct selector_key* key) {
@@ -609,6 +618,10 @@ unsigned error_write(struct selector_key* key) {
     if (sent_count == -1) return ERROR;
 
     buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
+
+    // Estadistica de bytes transferidos
+    total_bytes_sent += sent_count;
+
     if (!buffer_can_read(&(client->socket_data->write_buffer))) {
         // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
         //     return ERROR;

@@ -102,7 +102,7 @@ int main(const int argc, char** argv)
         goto finally;
     }
 
-    fprintf(stdout, "Listening on TCP port %d\n", args.pop3_port);
+    fprintf(stdout, "Listening on TCP (POP 3) port %d\n", args.pop3_port);
 
     // DAJT socket setup
     struct sockaddr_in6 addr_dajt;
@@ -142,7 +142,7 @@ int main(const int argc, char** argv)
         goto finally;
     }
 
-    fprintf(stdout, "Listening on DAJT port %d\n", args.dajt_port);
+    fprintf(stdout, "Listening on TCP (DAJT) port %d\n", args.dajt_port);
 
     // Selector setup
     const struct selector_init conf = {

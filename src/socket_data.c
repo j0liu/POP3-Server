@@ -7,17 +7,15 @@
 #include "netutils.h"
 #include "socket_data.h"
 
-#define BUFFER_SIZE 1024
-
-SocketData* initialize_socket_data(const int fd)
+SocketData* initialize_socket_data(const int fd, unsigned buffer_size)
 {
     SocketData* new_socket_data = malloc(sizeof(SocketData));
     if (new_socket_data == NULL) {
         return NULL;
     }
     new_socket_data->fd = fd;
-    buffer_init(&new_socket_data->read_buffer, BUFFER_SIZE, malloc(BUFFER_SIZE));
-    buffer_init(&new_socket_data->write_buffer, BUFFER_SIZE, malloc(BUFFER_SIZE));
+    buffer_init(&new_socket_data->read_buffer, buffer_size, malloc(buffer_size));
+    buffer_init(&new_socket_data->write_buffer, buffer_size, malloc(buffer_size));
     return new_socket_data;
 }
 

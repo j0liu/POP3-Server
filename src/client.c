@@ -5,6 +5,8 @@
 
 #include "client.h"
 
+unsigned current_buffer_size = 1024;
+
 static ClientData* initialize_pop3_client_data()
 {
     ClientData* client_data = malloc(sizeof(*client_data));
@@ -17,12 +19,9 @@ static ClientData* initialize_pop3_client_data()
     client_data->byte_stuffing = false;
     client_data->current_mail = NO_EMAIL;
     client_data->mail_fd = -1;
-    buffer_init(&client_data->mail_buffer, 1024, malloc(1024)); // TODO: constantes
+    buffer_init(&client_data->mail_buffer, current_buffer_size, malloc(current_buffer_size)); 
     return client_data;
 }
-
-
-
 
 void free_client_data(ClientData* client_data)
 {
@@ -54,7 +53,7 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
     extern parser_definition pop3_parser_definition;
     client->pop3parser = parser_init(&pop3_parser_definition);
 
-    client->socket_data = initialize_socket_data(client_fd); 
+    client->socket_data = initialize_socket_data(client_fd, current_buffer_size); 
     client->state = AUTHORIZATION;
     client->user = NULL;
     client->last_activity_time = time(NULL);
@@ -70,6 +69,8 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
             free(client);
             return NULL;
         }
+    } else {
+        client->client_data = NULL;
     }
 
     return client;

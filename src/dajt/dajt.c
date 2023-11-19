@@ -8,7 +8,14 @@
 #include "../responses.h"
 
 extern Args args;
+extern unsigned long total_bytes_sent;
+extern unsigned long current_connections;
+extern unsigned long total_connections;
+extern unsigned long total_errors;
+extern unsigned current_buffer_size;
 
+#define MIN_BUFFER_SIZE 1 
+#define MAX_BUFFER_SIZE 1 << 20 
 
 // TODO: Mover
 #define FINISH_CONNECTION true
@@ -23,16 +30,13 @@ static int auth_handler(Client * client, char* commandParameters, uint8_t parame
         // get user from the string commandParameters (the format is "user password")
         int pos = 0;
         while (pos < parameters_length && args.users[i].name[pos] == commandParameters[pos] && args.users[i].name[pos] != '\0') {
-            printf("%c = %c\n", args.users[i].name[pos], commandParameters[pos]);
             pos++;
         }
 
         if (pos < parameters_length && args.users[i].name[pos] == '\0' && commandParameters[pos] == ' ') {
+            pos++;
             int passPos = 0; 
-            // parameters_length -= pos;
-            // commandParameters += pos;
             while (pos + passPos < parameters_length && args.users[i].pass[passPos] == commandParameters[pos + passPos] && args.users[i].pass[passPos] != '\0') {
-                printf("%c = %c\n", args.users[i].pass[passPos], commandParameters[pos + passPos]);
                 passPos++;
             }
             if (pos + passPos == parameters_length && args.users[i].pass[passPos] == '\0') {
@@ -49,13 +53,65 @@ static int auth_handler(Client * client, char* commandParameters, uint8_t parame
     return COMMAND_WRITE; 
 }
 
+static int first_argument_to_int(Client* client, char* commandParameters)
+{
+    char* endptr;
+    int num = -1, len;
+    if (commandParameters != NULL) {
+        num = strtol(commandParameters, &endptr, 10);
+        if (num >= MIN_BUFFER_SIZE && num <= MAX_BUFFER_SIZE && *endptr == '\0' && endptr != commandParameters) {
+            return num;
+        }
+    }
+    char buff[100] = { 0 }; // TODO: Improve
+    if (num <= 0 || endptr == commandParameters) {
+        len = sprintf(buff, ERR_INVALID_NUMBER, commandParameters != NULL ? commandParameters : "");
+    } else if (*endptr != '\0') {
+        len = sprintf(buff, ERR_NOISE, endptr);
+    } else if (num > client->client_data->mail_count) {
+        len = sprintf(buff, NO_MESSAGE_LIST, num);
+    }
+    socket_buffer_write(client->socket_data, buff, len);
+    return -1;
+}
+
+
 // user token
 static int buff_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
-    return 0;
+    if (parameters_length == 0) {
+        size_t len = buffer_get_write_len(&client->socket_data->write_buffer);
+        char buffer[190] = {0};
+        int buffLen = sprintf(buffer, GET_BUFFER_DAJT, current_buffer_size);
+        if (buffLen <= (int) len) {
+            client->command_state.finished = true;  
+            socket_buffer_write(client->socket_data, buffer, buffLen);
+            client->command_state.finished = true; 
+        }
+    } else {
+        int arg = first_argument_to_int(client, commandParameters);
+        if (arg < 0) {
+            printf("Error\n");
+            return ERROR;
+            // TODO: Manejar error 
+        }
+        if (socket_buffer_write(client->socket_data, SET_BUFFER_DAJT, sizeof SET_BUFFER_DAJT - 1)) {
+            current_buffer_size = arg;
+            client->command_state.finished = true; 
+        }
+    }
+    return COMMAND_WRITE;
 }
 
 static int stat_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
-    return 0;
+    size_t len = buffer_get_write_len(&client->socket_data->write_buffer);
+    // TODO: Manejar tamaño del buffer
+    char buffer[190] = {0};
+    int buffLen = sprintf(buffer, GET_STATS_DAJT, total_bytes_sent, current_connections, total_connections, total_errors);
+    if (buffLen <= (int) len) {
+        client->command_state.finished = true;  
+        socket_buffer_write(client->socket_data, buffer, buffLen);
+    }
+    return COMMAND_WRITE;
 }
 
 static int quit_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
@@ -256,8 +312,26 @@ void command_dajt_write_arrival(const unsigned prev_state, const unsigned state,
 }
 
 void done_dajt_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key){
-
+    printf("I'm d(ajt)one\n");
+    free_client(ATTACHMENT(key));
+    if (selector_unregister_fd(key->s, key->fd) != SELECTOR_SUCCESS) {
+        // TODO: Ver si esto esta ok
+        abort();
+    }
 }
+
 unsigned error_dajt_write(struct selector_key* key){
-    return 0;
+    Client * client = ATTACHMENT(key);
+    //ClientData * client_data = client->client_data;
+    size_t len = 0;
+    uint8_t* ptr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
+    ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
+
+    if (sent_count == -1) return ERROR;
+
+    buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
+    if (!buffer_can_read(&(client->socket_data->write_buffer))) {
+        return DONE;
+    }
+    return ERROR;
 }
