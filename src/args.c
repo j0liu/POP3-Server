@@ -7,9 +7,12 @@
 #include <string.h> /* memset */
 #include <sys/stat.h>
 
+#include "global_state/globalstate.h"
 #include "args.h"
 
 Args args;
+extern GlobalState global_state;
+
 
 static unsigned short port(const char* s)
 {
@@ -24,7 +27,7 @@ static unsigned short port(const char* s)
     return (unsigned short)sl;
 }
 
-static void user(char* s, struct users* user)
+static void user(char* s, struct User* user)
 {
     char* p = strchr(s, ':');
     if (p == NULL) {
@@ -53,8 +56,10 @@ static void usage(const char* progName)
     printf("  -v          Display version information\n");
     printf("  -p <port>   Set the POP3 port (default: 110)\n");
     printf("  -P <port>   Set the DAJT port (default: 6969)\n");
-    printf("  -u <user>   Add a user in the format user:pass\n");
+    printf("  -u <user>   Add a pop3 user in the format user:pass\n");
+    printf("  -U <user>   Add a dajt user in the format user:pass\n");
     printf("  -d <path>   Set the mail directory path (default: ./Maildir)\n");
+    printf("  -t <path> <args...>  Set the transformation path and arguments (default: ./bin/usr/tr 'a-z' 'A-Z')\n");
 }
 
 void parse_args(const int argc, char** argv, Args* args)
@@ -68,7 +73,7 @@ void parse_args(const int argc, char** argv, Args* args)
     int c;
     args->quantity_users = 0;
 
-    while ((c = getopt(argc, argv, "hp:d:u:vP:")) != -1) {
+    while ((c = getopt(argc, argv, "hp:d:u:U:vP:t:")) != -1) {
         switch (c) {
         case 'h':
             usage(argv[0]);
@@ -88,6 +93,14 @@ void parse_args(const int argc, char** argv, Args* args)
             user(optarg, &args->users[args->quantity_users]);
             args->quantity_users++;
             break;
+        case 'U':
+            if (args->quantity_users >= MAX_USERS) {
+                fprintf(stderr, "Maximum number of command line users reached: %d.\n", MAX_USERS);
+                exit(1);
+            }
+            user(optarg, &args->admins[args->quantity_admins]);
+            args->quantity_admins++;
+            break;
         case 'v':
             version();
             exit(0);
@@ -99,6 +112,10 @@ void parse_args(const int argc, char** argv, Args* args)
                 fprintf(stderr, "Invalid maildir path: %s\n", args->maildir_path);
                 exit(1);
             }
+            break;
+        case 't':
+            set_transformation(optarg);
+            global_state.transformations_enabled = true;
             break;
         default:
             fprintf(stderr, "Unknown argument %c.\n", c);

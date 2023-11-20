@@ -4,8 +4,9 @@
 #include <time.h>
 
 #include "client.h"
+#include "global_state/globalstate.h"
 
-unsigned current_buffer_size = 1024;
+extern GlobalState global_state;
 
 static ClientData* initialize_pop3_client_data()
 {
@@ -21,7 +22,7 @@ static ClientData* initialize_pop3_client_data()
     client_data->mail_fd = -1;
     client_data->pop3_to_transf_fd = -1;
     client_data->transf_to_pop3_fd = -1;
-    buffer_init(&client_data->mail_buffer, current_buffer_size, malloc(current_buffer_size)); 
+    buffer_init(&client_data->mail_buffer, global_state.current_buffer_size, malloc(global_state.current_buffer_size)); 
     return client_data;
 }
 
@@ -55,7 +56,7 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
     extern parser_definition pop3_parser_definition;
     client->pop3parser = parser_init(&pop3_parser_definition);
 
-    client->socket_data = initialize_socket_data(client_fd, current_buffer_size); 
+    client->socket_data = initialize_socket_data(client_fd, global_state.current_buffer_size); 
     client->state = AUTHORIZATION;
     client->user = NULL;
     client->last_activity_time = time(NULL);

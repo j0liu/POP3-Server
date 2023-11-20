@@ -17,7 +17,7 @@
 #include "buffer.h"
 #include "netutils.h"
 #include "parser/parser.h"
-#include "pop3.h"
+#include "global_state/globalstate.h"
 #include "protocols.h"
 #include "selector.h"
 #include "socket_data.h"

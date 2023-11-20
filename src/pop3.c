@@ -23,19 +23,14 @@
 #include "pop3.h"
 #include "protocols.h"
 #include "socket_data.h"
-
+#include "global_state/globalstate.h"
 extern Args args;
+extern GlobalState global_state;
 
 #define FINISH_CONNECTION true
 #define CONTINUE_CONNECTION false
 
 #define REGISTER_PENDING -2
-
-unsigned long total_connections = 0;
-unsigned long current_connections = 0;
-unsigned long total_bytes_sent = 0;
-unsigned long total_errors = 0;
-bool transformations_enabled = true;
 
 static int capa_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
@@ -228,7 +223,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->mail_fd = open(client_data->mail_info_list[num - 1].filename, O_RDONLY);
         
         selector_fd_set_nio(client_data->mail_fd);
-        if (transformations_enabled) {
+        if (global_state.transformations_enabled) {
             int pop3_to_transf_fds[2];
             int transf_to_pop3_fds[2];
             if (pipe(pop3_to_transf_fds) == -1)
@@ -245,9 +240,10 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
                 for (int fd = STDERR_FILENO + 1; fd <= transf_to_pop3_fds[1]; fd++)
                     close(fd);
                 // char *const  param_list[] = {"transformer", NULL};
-                execle("/usr/bin/tr", "/usr/bin/tr", "aeiou", "i", NULL, NULL);
+                // execle("/usr/bin/tr", "/usr/bin/tr", "aeiou", "i", NULL, NULL);
                 // execle("/usr/bin/cat", "cat", NULL, NULL);
                 // execve("./transformer", param_list, 0);
+                execve(global_state.transformation_path[0], global_state.transformation_path, 0);
                 perror("execv");
                 exit(1);
             }
@@ -400,8 +396,8 @@ static bool process_event(parser_event* event, Client* client)
 void welcome_init(const unsigned prev_state, const unsigned state, struct selector_key* key)
 {
     buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
-    total_connections++;
-    current_connections++;
+    global_state.total_connections++;
+    global_state.current_connections++;
 
     // Agregamos el mensaje de bienvenida
     // Asumimos que el buffer no puede estar lleno en este punto
@@ -432,7 +428,7 @@ unsigned welcome_write(struct selector_key* key)
     }
 
     // Estadistica de bytes transferidos
-    total_bytes_sent += sent_count;
+    global_state.total_bytes_sent += sent_count;
 
     buffer_read_adv(wb, sent_count);
     // Si no pude mandar el mensaje de bienvenida completo, vuelve a intentar
@@ -514,7 +510,7 @@ void command_write_arrival(const unsigned prev_state, const unsigned state, stru
 
 static void register_mail_fds(struct selector_key* key, Client* client) {
     register_fd(key, client->client_data->mail_fd, OP_READ, client);
-    if (transformations_enabled) {
+    if (global_state.transformations_enabled) {
         register_fd(key, client->client_data->transf_to_pop3_fd, OP_READ, client);
         register_fd(key, client->client_data->pop3_to_transf_fd, OP_WRITE, client);
         // register_fd(key, client->client_data->pop3_to_transf_fd, OP_NOOP, client);
@@ -694,7 +690,7 @@ unsigned command_write(struct selector_key* key)
         buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
 
         // Estadistica de bytes transferidos
-        total_bytes_sent += sent_count;
+        global_state.total_bytes_sent += sent_count;
     }
 
     if (client_data->current_mail != NO_EMAIL && client_data->current_mail != EMAIL_FINISHED) {
@@ -733,7 +729,7 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
         // TODO: Ver si esto esta ok
         abort();
     }
-    current_connections--;
+    global_state.current_connections--;
 }
 
 unsigned error_write(struct selector_key* key) {
@@ -748,7 +744,7 @@ unsigned error_write(struct selector_key* key) {
     buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
 
     // Estadistica de bytes transferidos
-    total_bytes_sent += sent_count;
+    global_state.total_bytes_sent += sent_count;
 
     if (!buffer_can_read(&(client->socket_data->write_buffer))) {
         // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {

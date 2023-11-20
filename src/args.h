@@ -5,8 +5,10 @@
 #include <stddef.h>
 
 #define MAX_USERS 10
+#define MAX_ADMINS 5
+#define MAX_TRANFORMATION_PATH_LEN 256
 
-struct users {
+struct User {
     char* name;
     char* pass;
 };
@@ -15,8 +17,11 @@ typedef struct Args {
     unsigned short pop3_port;
     unsigned short dajt_port;
     char* maildir_path;
-    struct users users[MAX_USERS];
+    struct User users[MAX_USERS];
+    struct User admins[MAX_ADMINS];
     size_t quantity_users;
+    size_t quantity_admins;
+    char transformation_path[MAX_TRANFORMATION_PATH_LEN];
 } Args;
 
 /**

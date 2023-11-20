@@ -6,14 +6,16 @@
 #include "../buffer.h"
 #include "../client.h"
 #include "../responses.h"
+#include "../global_state/globalstate.h"
 
 extern Args args;
-extern unsigned long total_bytes_sent;
-extern unsigned long current_connections;
-extern unsigned long total_connections;
-extern unsigned long total_errors;
-extern unsigned current_buffer_size;
-extern bool transformations_enabled;
+extern GlobalState global_state;
+// extern unsigned long total_bytes_sent;
+// extern unsigned long current_connections;
+// extern unsigned long total_connections;
+// extern unsigned long total_errors;
+// extern unsigned current_buffer_size;
+// extern bool transformations_enabled;
 
 #define MIN_BUFFER_SIZE 1 
 #define MAX_BUFFER_SIZE 1 << 20 
@@ -27,22 +29,22 @@ extern bool transformations_enabled;
 static int auth_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
     //ClientData* client_data = client->client_data;
-    for (int i = 0; i < (int)args.quantity_users; i++) {
+    for (int i = 0; i < (int)args.quantity_admins; i++) {
         // get user from the string commandParameters (the format is "user password")
         int pos = 0;
-        while (pos < parameters_length && args.users[i].name[pos] == commandParameters[pos] && args.users[i].name[pos] != '\0') {
+        while (pos < parameters_length && args.admins[i].name[pos] == commandParameters[pos] && args.admins[i].name[pos] != '\0') {
             pos++;
         }
 
-        if (pos < parameters_length && args.users[i].name[pos] == '\0' && commandParameters[pos] == ' ') {
+        if (pos < parameters_length && args.admins[i].name[pos] == '\0' && commandParameters[pos] == ' ') {
             pos++;
             int passPos = 0; 
-            while (pos + passPos < parameters_length && args.users[i].pass[passPos] == commandParameters[pos + passPos] && args.users[i].pass[passPos] != '\0') {
+            while (pos + passPos < parameters_length && args.admins[i].pass[passPos] == commandParameters[pos + passPos] && args.admins[i].pass[passPos] != '\0') {
                 passPos++;
             }
-            if (pos + passPos == parameters_length && args.users[i].pass[passPos] == '\0') {
+            if (pos + passPos == parameters_length && args.admins[i].pass[passPos] == '\0') {
                 socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
-                client->user = &args.users[i];
+                client->user = &args.admins[i];
                 client->command_state.finished = true; 
                 client->state = TRANSACTION;
                 return COMMAND_READ; 
@@ -82,7 +84,7 @@ static int buff_handler(Client * client, char* commandParameters, uint8_t parame
     if (parameters_length == 0) {
         size_t len = buffer_get_write_len(&client->socket_data->write_buffer);
         char buffer[190] = {0};
-        int buffLen = sprintf(buffer, GET_BUFFER_DAJT, current_buffer_size);
+        int buffLen = sprintf(buffer, GET_BUFFER_DAJT, global_state.current_buffer_size);
         if (buffLen <= (int) len) {
             client->command_state.finished = true;  
             socket_buffer_write(client->socket_data, buffer, buffLen);
@@ -96,7 +98,7 @@ static int buff_handler(Client * client, char* commandParameters, uint8_t parame
             // TODO: Manejar error 
         }
         if (socket_buffer_write(client->socket_data, SET_BUFFER_DAJT, sizeof SET_BUFFER_DAJT - 1)) {
-            current_buffer_size = arg;
+            global_state.current_buffer_size = arg;
             client->command_state.finished = true; 
         }
     }
@@ -107,7 +109,7 @@ static int stat_handler(Client * client, char* commandParameters, uint8_t parame
     size_t len = buffer_get_write_len(&client->socket_data->write_buffer);
     // TODO: Manejar tamaño del buffer
     char buffer[190] = {0};
-    int buffLen = sprintf(buffer, GET_STATS_DAJT, total_bytes_sent, current_connections, total_connections, total_errors);
+    int buffLen = sprintf(buffer, GET_STATS_DAJT, global_state.total_bytes_sent, global_state.current_connections, global_state.total_connections, global_state.total_errors);
     if (buffLen <= (int) len) {
         client->command_state.finished = true;  
         socket_buffer_write(client->socket_data, buffer, buffLen);
@@ -122,16 +124,40 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
 }
 
 static int ttra_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
+    global_state.transformations_enabled = !global_state.transformations_enabled;
     socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
-    transformations_enabled = !transformations_enabled;
     client->command_state.finished = true; 
-    return COMMAND_READ;
+    return COMMAND_WRITE; 
 }
 
 static int tran_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
     socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
+    if (parameters_length != 0) {
+        set_transformation(commandParameters);
+    } else {
+        size_t len = 0; 
+        uint8_t * wbuffer = buffer_write_ptr(&client->socket_data->write_buffer, &len);
+        size_t initial_len = len; 
+        char * arg;
+        for (int i = 0; (arg = global_state.transformation_path[i]) != NULL; i++) {
+            size_t arg_len = strlen(arg) + 1;
+            if (len < arg_len + 1) {
+                // TODO: Manejar error
+                return ERROR;
+            }
+            len -= sprintf((char *)wbuffer, "%s ", arg);;
+            wbuffer += arg_len;
+        }
+        if (len >= 2) {
+            printf("Imprimiendo crlf\n");
+            memcpy(wbuffer, CRLF, sizeof CRLF -1);
+            buffer_write_adv(&client->socket_data->write_buffer, initial_len + 2 - len);
+        } else {
+            return ERROR;
+        }
+    }
     client->command_state.finished = true; 
-    return COMMAND_READ;
+    return COMMAND_WRITE; 
 }
 
 // AUTH user token
