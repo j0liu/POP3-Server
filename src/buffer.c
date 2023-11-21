@@ -64,6 +64,10 @@ inline uint8_t * buffer_read_adv(buffer* b, const ssize_t bytes)
         if (b->read == b->write) {
             // compactacion poco costosa
             buffer_compact(b);
+        } else if (b->read == b->write - 1) {
+            *b->data = *b->read;
+            b->read = b->data;
+            b->write = b->data + 1;
         }
         return b->read;
     }
