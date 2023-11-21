@@ -28,7 +28,6 @@ static ClientData* initialize_pop3_client_data()
 
 void free_client_data(ClientData* client_data)
 {
-    // free_socket_data(client_data->socket_data);
     free(client_data);
 }
 
@@ -81,9 +80,10 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
 
 void free_client(Client* client)
 {
+    close(client->socket_data->fd);
+    free_socket_data(client->socket_data);
     free_client_data(client->client_data);
     free(client->connection);
-    free(client->socket_data);
     parser_destroy(client->pop3parser);
     free(client);
     
