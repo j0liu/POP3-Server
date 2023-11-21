@@ -31,6 +31,7 @@ typedef struct CommandState {
 
 typedef struct ClientData {
     MailInfo* mail_info_list;
+    int list_current_mail;
     int mail_count;
     int mail_count_not_deleted;
     int mail_fd; 

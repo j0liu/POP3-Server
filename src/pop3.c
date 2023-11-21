@@ -164,30 +164,37 @@ static int list_handler(Client* client, char* commandParameters, uint8_t paramet
 {
     ClientData * client_data = client->client_data;
     char buff[100] = { 0 }; // TODO: Improve
-    while (*commandParameters == ' ') {
-        commandParameters++;
-        parameters_length--;
+    if (client_data->list_current_mail == 0) {
+        while (*commandParameters == ' ') {
+            commandParameters++;
+            parameters_length--;
+        }
     }
 
     if (parameters_length == 0) {
-        int len = sprintf(buff, OK_LIST, client_data->mail_count_not_deleted);
-        socket_buffer_write(client->socket_data, buff, len);
-
-        for (int i = 0; i < client_data->mail_count; i++) {
-            if (!client_data->mail_info_list[i].deleted) {
-                int len = sprintf(buff, "%d %ld" CRLF, i + 1, client_data->mail_info_list[i].size);
-                socket_buffer_write(client->socket_data, buff, len);
-            }
+        if (client_data->list_current_mail == 0) {
+            int len = sprintf(buff, OK_LIST, client_data->mail_count_not_deleted);
+            socket_buffer_write(client->socket_data, buff, len);
         }
-        socket_buffer_write(client->socket_data, TERMINATION, sizeof TERMINATION - 1);
+
+        if (!client_data->mail_info_list[client_data->list_current_mail].deleted) {
+            int len = sprintf(buff, "%d %ld" CRLF, client_data->list_current_mail + 1, client_data->mail_info_list[client_data->list_current_mail].size);
+            socket_buffer_write(client->socket_data, buff, len);
+        }
+        client_data->list_current_mail++;
+        if (client_data->list_current_mail == client_data->mail_count) {
+            client_data->list_current_mail = 0;
+            socket_buffer_write(client->socket_data, TERMINATION, sizeof TERMINATION - 1);
+            client->command_state.finished = true;
+        }
     } else {
         int num = first_argument_to_int(client, commandParameters);
         if (num > 0) {
             int len = sprintf(buff, OK " %d %ld" CRLF, num, client_data->mail_info_list[num - 1].size);
             socket_buffer_write(client->socket_data, buff, len);
         }
+        client->command_state.finished = true;
     }
-    client->command_state.finished = true;
     return COMMAND_WRITE;
 }
 

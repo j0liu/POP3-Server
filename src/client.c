@@ -15,6 +15,7 @@ static ClientData* initialize_pop3_client_data()
         return NULL;
     }
     client_data->mail_info_list = NULL;
+    client_data->list_current_mail = 0;
     client_data->mail_count = 0;
     client_data->mail_count_not_deleted = 0;
     client_data->byte_stuffing = false;
