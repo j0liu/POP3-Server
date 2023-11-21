@@ -21,7 +21,7 @@ typedef struct Args {
     struct User admins[MAX_ADMINS];
     size_t quantity_users;
     size_t quantity_admins;
-    char transformation_path[MAX_TRANFORMATION_PATH_LEN];
+    char * transformation_path;
 } Args;
 
 /**

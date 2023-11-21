@@ -10,7 +10,8 @@ typedef struct GlobalState {
     unsigned long total_bytes_sent;
     unsigned long total_errors;
     bool transformations_enabled;
-    char ** transformation_path;
+    char * transformation_path;
+    size_t transformation_path_len;
     unsigned current_buffer_size;
 } GlobalState;
 

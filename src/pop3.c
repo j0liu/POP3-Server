@@ -240,11 +240,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
                 dup2(transf_to_pop3_fds[1], STDOUT_FILENO);
                 for (int fd = STDERR_FILENO + 1; fd <= transf_to_pop3_fds[1]; fd++)
                     close(fd);
-                // char *const  param_list[] = {"transformer", NULL};
-                // execle("/usr/bin/tr", "/usr/bin/tr", "aeiou", "i", NULL, NULL);
-                // execle("/usr/bin/cat", "cat", NULL, NULL);
-                // execve("./transformer", param_list, 0);
-                execve(global_state.transformation_path[0], global_state.transformation_path, 0);
+                execl("/bin/sh", "sh", "-c", global_state.transformation_path, (char *) 0);
                 perror("execv");
                 exit(1);
             }

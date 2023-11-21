@@ -11,12 +11,6 @@
 
 extern Args args;
 extern GlobalState global_state;
-// extern unsigned long total_bytes_sent;
-// extern unsigned long current_connections;
-// extern unsigned long total_connections;
-// extern unsigned long total_errors;
-// extern unsigned current_buffer_size;
-// extern bool transformations_enabled;
 
 #define MIN_BUFFER_SIZE 1 
 #define MAX_BUFFER_SIZE 1 << 20 
@@ -142,26 +136,9 @@ static int tran_handler(Client * client, char* commandParameters, uint8_t parame
     } else if (global_state.transformation_path != NULL) {
         size_t len = 0; 
         uint8_t * wbuffer = buffer_write_ptr(&client->socket_data->write_buffer, &len);
-        size_t initial_len = len; 
-        len -= sprintf((char *)wbuffer, "%d ", global_state.transformations_enabled);
-        wbuffer += 2;
-        char * arg;
-        for (int i = 0; (arg = global_state.transformation_path[i]) != NULL; i++) {
-            size_t arg_len = strlen(arg) + 1;
-            if (len < arg_len + 1) {
-                // TODO: Manejar error
-                return ERROR;
-            }
-            len -= sprintf((char *)wbuffer, "%s ", arg);;
-            wbuffer += arg_len;
-        }
-        if (len >= sizeof CRLF - 1) {
-            log(LOG_DEBUG, "Imprimiendo crlf");
-            memcpy(wbuffer, CRLF, sizeof CRLF -1);
-            buffer_write_adv(&client->socket_data->write_buffer, initial_len + 2 - len);
-        } else {
-            return ERROR;
-        }
+        size_t written_count = sprintf((char *)wbuffer, "%d: %s ", global_state.transformations_enabled, global_state.transformation_path);
+        buffer_write_adv(&client->socket_data->write_buffer, written_count);
+        // TODO: Garantizar tamaño minimo del buffer
     } else {
         socket_buffer_write(client->socket_data, NO_TRANSFORMATIONS_SET_DAJT, sizeof NO_TRANSFORMATIONS_SET_DAJT - 1);
     }
