@@ -60,7 +60,7 @@ static int auth_handler(Client * client, char* commandParameters, uint8_t parame
 static int first_argument_to_int(Client* client, char* commandParameters)
 {
     char* endptr;
-    int num = -1, len;
+    int num = -1, len = 0;
     if (commandParameters != NULL) {
         num = strtol(commandParameters, &endptr, 10);
         if (num >= MIN_BUFFER_SIZE && num <= MAX_BUFFER_SIZE && *endptr == '\0' && endptr != commandParameters) {

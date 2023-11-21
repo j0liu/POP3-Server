@@ -123,7 +123,7 @@ static int pass_handler(Client * client, char* commandParameters, uint8_t parame
 static int first_argument_to_int(Client* client, char* commandParameters)
 {
     char* endptr;
-    int num = -1, len;
+    int num = -1, len = 0;
     if (commandParameters != NULL) {
         num = strtol(commandParameters, &endptr, 10);
         if (num > 0 && num <= client->client_data->mail_count && *endptr == '\0' && endptr != commandParameters) {
@@ -187,7 +187,7 @@ static int list_handler(Client* client, char* commandParameters, uint8_t paramet
             socket_buffer_write(client->socket_data, buff, len);
         }
     }
-    client->command_state.finished = true; 
+    client->command_state.finished = true;
     return COMMAND_WRITE;
 }
 

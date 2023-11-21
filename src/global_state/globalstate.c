@@ -8,7 +8,7 @@ GlobalState global_state = {
     .total_errors = 0,
     .transformation_path = NULL, 
     .transformations_enabled = false,
-    .current_buffer_size = 1024
+    .current_buffer_size = 2048 
 };
 
 static void free_transformation_path() {

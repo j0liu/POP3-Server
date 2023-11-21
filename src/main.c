@@ -34,6 +34,10 @@ static void sigterm_handler(const int signal)
 
 int main(const int argc, char** argv)
 {
+    selector_status ss = SELECTOR_SUCCESS;
+    fd_selector selector = NULL;
+    int socket_pop3 = -1;
+    int socket_dajt = -1;
 
     log(LOG_DEBUG, "log debugging enabled");
 
@@ -64,8 +68,6 @@ int main(const int argc, char** argv)
     extern Args args;
     parse_args(argc, argv, &args);
     int no = 0;
-    selector_status ss = SELECTOR_SUCCESS;
-    fd_selector selector = NULL;
 
     // POP3 SOCKET setup
     struct sockaddr_in6 addr_pop3;
@@ -74,7 +76,7 @@ int main(const int argc, char** argv)
     addr_pop3.sin6_addr = in6addr_any;
     addr_pop3.sin6_port = htons(args.pop3_port);
 
-    const int socket_pop3 = socket(AF_INET6, SOCK_STREAM, 0);
+    socket_pop3 = socket(AF_INET6, SOCK_STREAM, 0);
     if (socket_pop3 < 0) {
         err_msg = "Unable to create POP3 socket";
         goto finally;
@@ -114,7 +116,7 @@ int main(const int argc, char** argv)
     addr_dajt.sin6_addr = in6addr_any;
     addr_dajt.sin6_port = htons(args.dajt_port);
 
-    const int socket_dajt = socket(AF_INET6, SOCK_STREAM, 0);
+    socket_dajt = socket(AF_INET6, SOCK_STREAM, 0);
     if (socket_dajt < 0) {
         err_msg = "Unable to create DAJT socket";
         goto finally;
