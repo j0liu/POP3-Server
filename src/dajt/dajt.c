@@ -7,6 +7,7 @@
 #include "../client.h"
 #include "../responses.h"
 #include "../global_state/globalstate.h"
+#include "../logger/logger.h"
 
 extern Args args;
 extern GlobalState global_state;
@@ -93,7 +94,7 @@ static int buff_handler(Client * client, char* commandParameters, uint8_t parame
     } else {
         int arg = first_argument_to_int(client, commandParameters);
         if (arg < 0) {
-            printf("Error\n");
+            log(LOG_ERROR, "Error");
             return ERROR;
             // TODO: Manejar error 
         }
@@ -149,7 +150,7 @@ static int tran_handler(Client * client, char* commandParameters, uint8_t parame
             wbuffer += arg_len;
         }
         if (len >= 2) {
-            printf("Imprimiendo crlf\n");
+            log(LOG_DEBUG, "Imprimiendo crlf");
             memcpy(wbuffer, CRLF, sizeof CRLF -1);
             buffer_write_adv(&client->socket_data->write_buffer, initial_len + 2 - len);
         } else {
@@ -187,7 +188,7 @@ static int consume_pop3_buffer(parser* pop3parser, SocketData* socket_data)
         }
     }
 
-    printf("No more data\n");
+    log(LOG_DEBUG, "No more data");
     return -1;
 }
 
@@ -280,7 +281,8 @@ unsigned command_dajt_read(struct selector_key* key){
         //     socket_buffer_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
         //     break;
         // }
-        //printf("buffer_can_read: %d\n", buffer_can_read(&client_data->socket_data->read_buffer));
+        
+        logf(LOG_DEBUG, "buffer_can_read: %d", buffer_can_read(&client->socket_data->read_buffer));
 
         if (consume_pop3_buffer(client->pop3parser, client->socket_data) == 0) {
 
@@ -290,13 +292,13 @@ unsigned command_dajt_read(struct selector_key* key){
                 free(event);
                 parser_reset(client->pop3parser);
                 if (result == CONTINUE_CONNECTION) {
-                    printf("Continue connection\n");
+                    log(LOG_DEBUG, "Continue connection");
                     return COMMAND_WRITE; 
                 }
 
                 // TODO: Manejar errores
                 if (result == FINISH_CONNECTION) {
-                    printf("Error!");
+                    log(LOG_ERROR, "Error!");
                     return ERROR; 
                 }
             }
@@ -311,7 +313,7 @@ void command_dajt_read_arrival(const unsigned prev_state, const unsigned state, 
 }
 
 unsigned command_dajt_write(struct selector_key* key){
-    printf("arrived to write dajt\n");
+    log(LOG_DEBUG, "Arrived to write DAJT");
     Client * client = ATTACHMENT(key);
     // ClientData * client_data = client->client_data;
     CommandState * command_state = &client->command_state;
@@ -325,7 +327,7 @@ unsigned command_dajt_write(struct selector_key* key){
     ssize_t sent_count = 0;
     uint8_t* wbPtr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
     if (len > 0) {
-        printf("sending to client\n");
+        log(LOG_DEBUG, "Sending to client");
         sent_count = send(client->socket_data->fd, wbPtr, len, MSG_NOSIGNAL);
         if (sent_count == -1) return ERROR;
         buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
@@ -340,7 +342,7 @@ unsigned command_dajt_write(struct selector_key* key){
         // }
         return COMMAND_READ;
     }
-    printf("exiting command write\n");
+    log(LOG_DEBUG, "Exiting command write");
     return result_state != -1? result_state : COMMAND_WRITE; 
 }
 
@@ -351,7 +353,7 @@ void command_dajt_write_arrival(const unsigned prev_state, const unsigned state,
 }
 
 void done_dajt_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key){
-    printf("I'm d(ajt)one\n");
+    log(LOG_DEBUG, "I'm d(ajt)one");
     free_client(ATTACHMENT(key));
     if (selector_unregister_fd(key->s, key->fd) != SELECTOR_SUCCESS) {
         // TODO: Ver si esto esta ok

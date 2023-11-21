@@ -15,6 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "logger/logger.h"
 #include "buffer.h"
 #include "client.h"
 #include "mail.h"
@@ -264,7 +265,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         return REGISTER_PENDING;
     }  else if (num == EMAIL_FINISHED) {
         close(client_data->mail_fd);
-        printf("closing mail\n");
+        log(LOG_DEBUG, "Closing mail");
         // Send terminating sequence
         client_data->current_mail = NO_EMAIL;
         client_data->mail_fd = -1;
@@ -361,7 +362,7 @@ static int consume_pop3_buffer(parser* pop3parser, SocketData* socket_data)
         }
     }
 
-    printf("No more data\n");
+    log(LOG_DEBUG, "No more data");
     return -1;
 }
 
@@ -475,7 +476,7 @@ unsigned command_read(struct selector_key* key)
         //     socket_buffer_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
         //     break;
         // }
-        //printf("buffer_can_read: %d\n", buffer_can_read(&client_data->socket_data->read_buffer));
+        logf(LOG_DEBUG, "buffer_can_read: %d", buffer_can_read(&client->socket_data->read_buffer));
 
         if (consume_pop3_buffer(client->pop3parser, client->socket_data) == 0) {
 
@@ -485,13 +486,13 @@ unsigned command_read(struct selector_key* key)
                 free(event);
                 parser_reset(client->pop3parser);
                 if (result == CONTINUE_CONNECTION) {
-                    printf("Continue connection\n");
+                    log(LOG_DEBUG, "Continue connection");
                     return COMMAND_WRITE; 
                 }
 
                 // TODO: Manejar errores
                 if (result == FINISH_CONNECTION) {
-                    printf("Error!");
+                    log(LOG_ERROR, "Error!");
                     return ERROR; 
                 }
             }
@@ -514,13 +515,13 @@ static void register_mail_fds(struct selector_key* key, Client* client) {
         register_fd(key, client->client_data->transf_to_pop3_fd, OP_READ, client);
         register_fd(key, client->client_data->pop3_to_transf_fd, OP_WRITE, client);
         // register_fd(key, client->client_data->pop3_to_transf_fd, OP_NOOP, client);
-        printf("registered pipes\n");
+        log(LOG_DEBUG, "registered pipes");
     }
 } 
 
 static void mail_buffer_to_client_buffer(Client* client){
     ClientData* client_data = client->client_data;
-    printf("Byte stuffing\n");
+    log(LOG_DEBUG, "Byte stuffing");
     size_t mail_len = 0;
     uint8_t * mbPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
     // uint8_t * writeBufferWritePtr = buffer_write_ptr(&(client_data->socket_data->write_buffer), &len);
@@ -566,11 +567,11 @@ static void mail_buffer_to_client_buffer(Client* client){
 }
 
 static int mail_file_to_pipe(struct selector_key* key, Client* client) {
-    printf("reading mail to pipe\n");
+    log(LOG_DEBUG, "reading mail to pipe");
     ClientData * client_data = client->client_data;
     uint8_t buff[1024] = {0}; // TODO: Poner una variable estatica con tamaño maximo del pipe?
     ssize_t read_count = read(client_data->mail_fd, buff, 1024);
-    printf("Read %ld from mail\n", read_count);
+    logf(LOG_DEBUG, "Read %ld from mail", read_count);
     if (read_count > 0) {
         ssize_t written_count = write(client_data->pop3_to_transf_fd, buff, read_count);
         if (written_count < read_count) {
@@ -582,7 +583,7 @@ static int mail_file_to_pipe(struct selector_key* key, Client* client) {
                 written_count = 0;
             }
             lseek(client_data->mail_fd, -(read_count - written_count), SEEK_CUR); // TODO: PREGUNTAR SI ESTO ESTA BIEN!
-            printf("rolling back %ld\n", -(read_count - written_count));
+            logf(LOG_DEBUG, "rolling back %ld", -(read_count - written_count));
             selector_set_interest(key->s, client_data->mail_fd, OP_NOOP);
             selector_set_interest(key->s, client_data->pop3_to_transf_fd, OP_WRITE);
         } else {
@@ -605,25 +606,25 @@ static int mail_file_to_pipe(struct selector_key* key, Client* client) {
 
 static int processed_mail_to_mail_buffer(struct selector_key* key, Client* client, int pre_byte_stuffing_fd) {
     ClientData * client_data = client->client_data;
-    printf("reading processed mail \n");
+    log(LOG_DEBUG, "reading processed mail");
 
     size_t mail_len;
     uint8_t* mbPtr = buffer_write_ptr(&(client_data->mail_buffer), &mail_len);
 
     errno = 0;
     ssize_t read_count = read(pre_byte_stuffing_fd, mbPtr, mail_len);
-    printf("read processed%ld \n", read_count);
+    logf(LOG_DEBUG, "read processed%ld ", read_count);
     if (read_count < 0) {
         if (errno == EAGAIN) {
             // selector_set_interest(key->s, pre_byte_stuffing_fd, OP_NOOP);
-            printf("EAGAIN\n");
+            log(LOG_DEBUG, "EAGAIN");
             return COMMAND_WRITE;
         }
         perror("read");
         return ERROR;
     } else if (read_count == 0) {
         if (buffer_can_read(&(client_data->mail_buffer))) {
-            printf("Quedaron cosas por limpiar en el buffer\n");
+            log(LOG_DEBUG, "Quedaron cosas por limpiar en el buffer");
             size_t mail_len;
             uint8_t * mrPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
             ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mrPtr, mail_len);
@@ -634,13 +635,13 @@ static int processed_mail_to_mail_buffer(struct selector_key* key, Client* clien
             }
         }
 
-        printf("Terminando...\n");
+        log(LOG_DEBUG, "Terminando...");
         selector_unregister_fd(key->s, pre_byte_stuffing_fd);
         client_data->current_mail = EMAIL_FINISHED;
         selector_set_interest(key->s, client->socket_data->fd, OP_WRITE);
     } else {
         if (!buffer_can_read(&(client_data->mail_buffer))) {
-            printf("muting client socket, nothing to send\n");
+            log(LOG_DEBUG, "muting client socket, nothing to send");
             if (selector_set_interest(key->s, client->socket_data->fd, OP_NOOP) != SELECTOR_SUCCESS) {
                 return ERROR;
             }
@@ -655,17 +656,18 @@ unsigned command_write(struct selector_key* key)
     Client * client = ATTACHMENT(key);
     ClientData * client_data = client->client_data;
     CommandState * command_state = &client->command_state;
-    printf("\narrived to write r:%d s:%d m:%d rp:%d wp:%d\n", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
+    log(LOG_DEBUG, "\n")
+    logf(LOG_DEBUG, "arrived to write r:%d s:%d m:%d rp:%d wp:%d", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
     
     int result_state = -1;
     if (command_state->command_index != -1) {
-        printf("handling!!\n");
+        log(LOG_DEBUG, "handling!!");
         result_state = available_commands[command_state->command_index].handler(client, command_state->arguments, command_state->argLen);
         if (result_state == REGISTER_PENDING) {
             result_state = COMMAND_WRITE;
             register_mail_fds(key, client);
         }
-        printf("ended handling!!\n");
+        log(LOG_DEBUG, "ended handling!!");
     }
 
     if (client_data->byte_stuffing && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer))) {
@@ -678,11 +680,11 @@ unsigned command_write(struct selector_key* key)
         size_t len = 0;
         ssize_t sent_count = 0;
         uint8_t* wbPtr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
-        printf("sending to client, can send %ld\n", len);
+        logf(LOG_DEBUG, "sending to client, can send %ld", len);
 
         //TODO: ver si puede fallar el send si no es su turno
         sent_count = send(client->socket_data->fd, wbPtr, len, MSG_NOSIGNAL);
-        printf("sent %ld\n", sent_count);
+        logf(LOG_DEBUG, "sent %ld", sent_count);
         if (sent_count == -1) {
         //  selector_set_interest(key->s, client->socket_data->fd, OP_NOOP);
          return ERROR;
@@ -694,7 +696,7 @@ unsigned command_write(struct selector_key* key)
     }
 
     if (client_data->current_mail != NO_EMAIL && client_data->current_mail != EMAIL_FINISHED) {
-        printf("mail section\n");
+        log(LOG_DEBUG, "mail section");
         int pre_byte_stuffing_fd = client_data->pop3_to_transf_fd != -1 ? client_data->transf_to_pop3_fd : client_data->mail_fd;
         if (client_data->pop3_to_transf_fd != -1) {
             mail_file_to_pipe(key, client);
@@ -708,7 +710,7 @@ unsigned command_write(struct selector_key* key)
     //HANDLE INTERESTS
 
     if (client->command_state.finished && !buffer_can_read(&(client->socket_data->write_buffer))) {
-        printf("command finished, going to command read\n");
+        log(LOG_DEBUG, "command finished, going to command read");
         client->command_state.command_index = -1;
         client->command_state.argLen = 0;
         client->command_state.finished = false;
@@ -717,13 +719,13 @@ unsigned command_write(struct selector_key* key)
         }
         return COMMAND_READ;
     }
-    printf("exiting command write\n");
+    log(LOG_DEBUG, "exiting command write");
     return result_state != -1? result_state : COMMAND_WRITE; 
 }
 
 
 void done_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
-    printf("I'm done\n");
+    log(LOG_DEBUG, "I'm done");
     free_client(ATTACHMENT(key));
     if (selector_unregister_fd(key->s, key->fd) != SELECTOR_SUCCESS) {
         // TODO: Ver si esto esta ok

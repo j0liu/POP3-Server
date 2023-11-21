@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "logger/logger.h"
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -551,7 +552,7 @@ selector_status selector_select(fd_selector s)
             for (int i = 0; i < s->max_fd; i++) {
                 if (FD_ISSET(i, &s->master_r) || FD_ISSET(i, &s->master_w)) {
                     if (-1 == fcntl(i, F_GETFD, 0)) {
-                        fprintf(stderr, "Bad descriptor detected: %d\n", i);
+                        logf(LOG_ERROR, "Bad descriptor detected: %d", i);
                     }
                 }
             }

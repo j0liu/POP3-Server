@@ -21,19 +21,22 @@
 #include "protocols.h"
 #include "selector.h"
 #include "socket_data.h"
-
+#include "logger/logger.h"
 #define MAX_PENDING_CONNECTIONS 500
 
 bool done = false;
 
 static void sigterm_handler(const int signal)
 {
-    printf("Signal %d, cleaning up and exiting\n", signal);
+    logf(LOG_DEBUG, "Signal %d, cleaning up and exiting", signal);
     done = true;
 }
 
 int main(const int argc, char** argv)
 {
+
+    log(LOG_DEBUG, "log debugging enabled");
+
     const char* err_msg;
     int ret;
 
@@ -102,7 +105,7 @@ int main(const int argc, char** argv)
         goto finally;
     }
 
-    fprintf(stdout, "Listening on TCP (POP 3) port %d\n", args.pop3_port);
+    logf(LOG_DEBUG, "Listening on TCP (POP 3) port %d", args.pop3_port);
 
     // DAJT socket setup
     struct sockaddr_in6 addr_dajt;
@@ -142,7 +145,7 @@ int main(const int argc, char** argv)
         goto finally;
     }
 
-    fprintf(stdout, "Listening on TCP (DAJT) port %d\n", args.dajt_port);
+    logf(LOG_DEBUG, "Listening on TCP (DAJT) port %d", args.dajt_port);
 
     // Selector setup
     const struct selector_init conf = {
@@ -206,10 +209,7 @@ int main(const int argc, char** argv)
 
 finally:
     if (ss != SELECTOR_SUCCESS) {
-        fprintf(stderr, "%s: %s\n", (err_msg == NULL) ? "" : err_msg,
-            ss == SELECTOR_IO
-                ? strerror(errno)
-                : selector_error(ss));
+        logf(LOG_ERROR, "Error: %s %s", err_msg, ss == SELECTOR_IO ? strerror(errno) : selector_error(ss));
         ret = 2;
     } else if (err_msg) {
         perror(err_msg);
