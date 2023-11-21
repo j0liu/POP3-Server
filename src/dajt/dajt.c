@@ -125,6 +125,10 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
 }
 
 static int ttra_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
+    if (!global_state.transformations_enabled && global_state.transformation_path == NULL) {
+        log(LOG_ERROR, "no transformations");
+        return ERROR;
+    }
     global_state.transformations_enabled = !global_state.transformations_enabled;
     socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
     client->command_state.finished = true; 
@@ -135,10 +139,12 @@ static int tran_handler(Client * client, char* commandParameters, uint8_t parame
     socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
     if (parameters_length != 0) {
         set_transformation(commandParameters);
-    } else {
+    } else if (global_state.transformation_path != NULL) {
         size_t len = 0; 
         uint8_t * wbuffer = buffer_write_ptr(&client->socket_data->write_buffer, &len);
         size_t initial_len = len; 
+        len -= sprintf((char *)wbuffer, "%d ", global_state.transformations_enabled);
+        wbuffer += 2;
         char * arg;
         for (int i = 0; (arg = global_state.transformation_path[i]) != NULL; i++) {
             size_t arg_len = strlen(arg) + 1;
@@ -149,13 +155,15 @@ static int tran_handler(Client * client, char* commandParameters, uint8_t parame
             len -= sprintf((char *)wbuffer, "%s ", arg);;
             wbuffer += arg_len;
         }
-        if (len >= 2) {
+        if (len >= sizeof CRLF - 1) {
             log(LOG_DEBUG, "Imprimiendo crlf");
             memcpy(wbuffer, CRLF, sizeof CRLF -1);
             buffer_write_adv(&client->socket_data->write_buffer, initial_len + 2 - len);
         } else {
             return ERROR;
         }
+    } else {
+        socket_buffer_write(client->socket_data, NO_TRANSFORMATIONS_SET_DAJT, sizeof NO_TRANSFORMATIONS_SET_DAJT - 1);
     }
     client->command_state.finished = true; 
     return COMMAND_WRITE; 

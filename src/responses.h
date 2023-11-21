@@ -21,6 +21,6 @@
 #define SERVER_READY_DAJT (OK_DAJT " DAJT is ready to PUSH IT!" CRLF)
 #define ERR_INVALID_AUTH_DAJT (ERR_DAJT " Invalid authentication!" CRLF) 
 #define UNKNOWN_COMMAND_DAJT (ERR_DAJT " What are you talking about?! Get out of my sight" CRLF)
-
+#define NO_TRANSFORMATIONS_SET_DAJT (ERR_DAJT " No transformations set" CRLF)
 
 #endif

@@ -209,7 +209,7 @@ int main(const int argc, char** argv)
 
 finally:
     if (ss != SELECTOR_SUCCESS) {
-        logf(LOG_ERROR, "Error: %s %s", err_msg, ss == SELECTOR_IO ? strerror(errno) : selector_error(ss));
+        logf(LOG_INFO, "Error: %s %s", err_msg, ss == SELECTOR_IO ? strerror(errno) : selector_error(ss));
         ret = 2;
     } else if (err_msg) {
         perror(err_msg);

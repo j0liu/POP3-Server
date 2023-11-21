@@ -448,29 +448,15 @@ unsigned welcome_write(struct selector_key* key)
 
 void command_read_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
     if(prev_state != state) {
-        selector_set_interest(key->s, key->fd, OP_READ);
+        logf(LOG_DEBUG, "command read arrival %d", key->fd);
+        Client * client = ATTACHMENT(key);
+        selector_set_interest(key->s, client->socket_data->fd, OP_READ);
     }
 }
 
-unsigned command_read(struct selector_key* key)
-{
-    Client * client = ATTACHMENT(key);
-
+static int process_read_buffer(Client* client) {
+    int result = COMMAND_READ;
     buffer* rb = &client->socket_data->read_buffer;
-    size_t len;
-    uint8_t *rbPtr = buffer_write_ptr(rb, &len);
-    ssize_t read_count = recv(key->fd, rbPtr, len, 0); // TODO: Ver flags?
-
-    if (read_count <= 0) {
-        return DONE;
-    }
-
-    buffer_write_adv(rb, read_count);
-    rbPtr = buffer_read_ptr(rb, &len);
-
-    
-    int result;
-
     while (buffer_can_read(rb)) {
         // if (difftime(time(NULL), client_data->last_activity_time) > INACTIVITY_TIMEOUT) {
         //     socket_buffer_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
@@ -498,14 +484,44 @@ unsigned command_read(struct selector_key* key)
             }
         }
     }
-    
+    return result; 
+}
 
-    return COMMAND_READ;
+
+unsigned command_read(struct selector_key* key)
+{
+    Client * client = ATTACHMENT(key);
+    logf(LOG_DEBUG, "command read loop %d", key->fd);
+
+    buffer* rb = &client->socket_data->read_buffer;
+    size_t len;
+    uint8_t *rbPtr = buffer_write_ptr(rb, &len);
+    ssize_t read_count = recv(key->fd, rbPtr, len, 0); // TODO: Ver flags?
+
+    logf(LOG_DEBUG, "read %ld", read_count);
+    if (!buffer_can_read(&client->socket_data->read_buffer) && read_count == 0) {
+        return DONE;
+    } else if (read_count < 0) {
+        if (errno == EAGAIN) {
+            return COMMAND_READ;
+        }
+        // Ver error
+        return ERROR;
+    }
+
+    buffer_write_adv(rb, read_count);
+    // rbPtr = buffer_read_ptr(rb, &len);
+    
+    int result = process_read_buffer(client);
+
+    return result;
 }
 
 void command_write_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
     if(prev_state != state) {
-        selector_set_interest(key->s, key->fd, OP_WRITE);
+        logf(LOG_DEBUG, "command write arrival! %d", key->fd);
+        Client * client = ATTACHMENT(key);
+        selector_set_interest(key->s, client->socket_data->fd, OP_WRITE);
     }
 }
 
@@ -657,7 +673,7 @@ unsigned command_write(struct selector_key* key)
     ClientData * client_data = client->client_data;
     CommandState * command_state = &client->command_state;
     log(LOG_DEBUG, "\n")
-    logf(LOG_DEBUG, "arrived to write r:%d s:%d m:%d rp:%d wp:%d", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
+    logf(LOG_INFO, "arrived to write r:%d s:%d m:%d rp:%d wp:%d", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
     
     int result_state = -1;
     if (command_state->command_index != -1) {
@@ -686,8 +702,13 @@ unsigned command_write(struct selector_key* key)
         sent_count = send(client->socket_data->fd, wbPtr, len, MSG_NOSIGNAL);
         logf(LOG_DEBUG, "sent %ld", sent_count);
         if (sent_count == -1) {
-        //  selector_set_interest(key->s, client->socket_data->fd, OP_NOOP);
-         return ERROR;
+            if (errno == EAGAIN) {
+                log(LOG_DEBUG, "EAGAIN"); // TODO: Ver si esto esta bien
+                return COMMAND_WRITE;
+            }
+            //  selector_set_interest(key->s, client->socket_data->fd, OP_NOOP);
+            
+            return ERROR;
         }
         buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
 
@@ -714,10 +735,10 @@ unsigned command_write(struct selector_key* key)
         client->command_state.command_index = -1;
         client->command_state.argLen = 0;
         client->command_state.finished = false;
-        if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-            return ERROR;
-        }
-        return COMMAND_READ;
+        // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
+        //     return ERROR;
+        // }
+        result_state = process_read_buffer(client);
     }
     log(LOG_DEBUG, "exiting command write");
     return result_state != -1? result_state : COMMAND_WRITE; 
@@ -735,6 +756,7 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
 }
 
 unsigned error_write(struct selector_key* key) {
+    log(LOG_DEBUG, "entered error");
     Client * client = ATTACHMENT(key);
     //ClientData * client_data = client->client_data;
     size_t len = 0;
