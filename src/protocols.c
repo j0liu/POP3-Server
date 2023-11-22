@@ -7,6 +7,7 @@
 #include "protocols.h"
 #include "selector.h"
 #include "logger/logger.h"
+#include "global_state/globalstate.h"
 
 static void stm_read(struct selector_key* key);
 static void stm_write(struct selector_key* key);
@@ -45,6 +46,11 @@ static void accept_passive_sockets(struct selector_key* key, bool pop3) {
     }
 
     client = new_client(client_fd, &client_addr, client_addr_len, pop3);
+    if (!add_client(client)) {
+        log(LOG_ERROR, "No se pudo agregar el cliente, maximo alcanzado");
+        goto fail;
+    }
+
     if (client == NULL) {
         goto fail;
     }

@@ -25,10 +25,16 @@
 #define MAX_PENDING_CONNECTIONS 500
 
 bool done = false;
+extern GlobalState global_state;
 
 static void sigterm_handler(const int signal)
 {
     logf(LOG_DEBUG, "Signal %d, cleaning up and exiting", signal);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (global_state.clients[i] != NULL) {
+            remove_client(global_state.clients[i]);
+        }
+    }
     done = true;
 }
 

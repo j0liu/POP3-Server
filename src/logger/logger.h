@@ -42,10 +42,10 @@ const char *level_description(LOG_LEVEL level);
 			fprintf(stderr, "%s: %s:%d,%s, ", level_description(level), __FILE__, __LINE__, time_str); \
 			fprintf(stderr, fmt, __VA_ARGS__);                                                         \
 			fprintf(stderr, "\n");                                                                     \
-			if (level >= LOG_ERROR)                                                                    \
+			if (level >= LOG_ERROR && errno != 0)                                                      \
 				perror("Error: ");                                                                     \
 		}                                                                                              \
-		if (level == LOG_FATAL)                                                                            \
+		if (level == LOG_FATAL)                                                                        \
 			exit(1);                                                                                   \
 	}
 

@@ -21,6 +21,7 @@
 
 #define ERR_INVALID_STAT_DAJT (ERR_DAJT " stat is invalid" CRLF)
 #define ERR_INVALID_TTRA_DAJT (ERR_DAJT " Invalid use of TTRA" CRLF)
+#define ERR_INVALID_BUFFER_DAJT (ERR_DAJT " Invalid buffer size" CRLF)
 #define GET_BUFFER_DAJT (OK_DAJT CRLF "%d" CRLF) 
 #define SERVER_READY_DAJT (OK_DAJT " DAJT is ready to PUSH IT!" CRLF)
 #define ERR_INVALID_AUTH_DAJT (ERR_DAJT " Invalid authentication!" CRLF) 

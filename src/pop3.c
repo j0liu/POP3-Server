@@ -374,7 +374,6 @@ static bool process_event(parser_event* event, Client* client)
     //     return wTION;
     // }
 
-    client->last_activity_time = time(NULL);
     for (int i = 0; i < (int)N(available_commands); i++) {
         if (event->command_length == 4 && strncasecmp(event->command, available_commands[i].name, event->command_length) == 0) {
             if ((client->state & available_commands[i].valid_states) == 0) {
@@ -762,7 +761,7 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
         selector_unregister_fd(key->s, client->client_data->transf_to_pop3_fd);
         close(client->client_data->transf_to_pop3_fd);
     }
-    free_client(client);
+    remove_client(client);
 
     global_state.current_connections--;
 }

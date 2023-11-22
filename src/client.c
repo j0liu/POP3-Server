@@ -59,7 +59,6 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
     client->socket_data = initialize_socket_data(client_fd, global_state.current_buffer_size); 
     client->state = AUTHORIZATION;
     client->user = NULL;
-    client->last_activity_time = time(NULL);
 
     client->command_state.command_index = -1;
     client->command_state.argLen = 0;

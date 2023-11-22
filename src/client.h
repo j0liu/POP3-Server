@@ -63,9 +63,9 @@ struct Client {
     SocketData* socket_data;
     uint8_t state;
     struct User* user;
-    time_t last_activity_time;
+    // time_t last_activity_time;
+    int clientIndex;
 
-    // TODO: Ver si es mejor un CommandState * 
     CommandState command_state;
 };
 

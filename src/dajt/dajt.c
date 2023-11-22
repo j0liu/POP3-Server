@@ -45,9 +45,9 @@ static int auth_handler(Client * client, char* commandParameters, uint8_t parame
             }
         }
     }
-    client->command_state.finished = true; 
+    // client->command_state.finished = true; 
     socket_buffer_write(client->socket_data, ERR_INVALID_AUTH_DAJT, sizeof ERR_INVALID_AUTH_DAJT - 1);
-    return COMMAND_WRITE; 
+    return ERROR;
 }
 
 static int first_argument_to_int(Client* client, char* commandParameters)
@@ -65,6 +65,8 @@ static int first_argument_to_int(Client* client, char* commandParameters)
         memcpy(buff, ERR_INVALID_NUMBER_DAJT, sizeof ERR_INVALID_NUMBER_DAJT - 1);
     } else if (*endptr != '\0') {
         memcpy(buff, ERR_NOISE, sizeof ERR_NOISE - 1);
+    } else {
+        memcpy(buff, ERR_INVALID_BUFFER_DAJT, sizeof ERR_INVALID_BUFFER_DAJT - 1);
     }
     socket_buffer_write(client->socket_data, buff, len);
     return -1;
@@ -212,7 +214,6 @@ static bool process_event(parser_event* event, Client* client)
     //     return FINISH_CONNECTION;
     // }
 
-    client->last_activity_time = time(NULL);
     for (int i = 0; i < (int)N(dajt_available_commands); i++) {
         if (event->command_length == 4 && strncasecmp(event->command, dajt_available_commands[i].name, event->command_length) == 0) {
             if ((client->state & dajt_available_commands[i].valid_states) == 0) {
