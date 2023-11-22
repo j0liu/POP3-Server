@@ -44,23 +44,23 @@ static void user(char* s, struct User* user)
 
 static void version(void)
 {
-    log(LOG_ERROR, "POP3 version Alpha\n"
+    puts("POP3DAJT version Alpha\n"
                   "ITBA Protocolos de Comunicación 2023/2 -- Grupo 7\n"
-                  "Todos los derechos reservados bajo pena de muerte")
+                  "Todos los derechos reservados bajo pena de muerte");
 }
 
 static void usage(const char* progName)
 {
-    logf(LOG_INFO, "Usage: %s [options]", progName);
-    log(LOG_INFO, "Options:");
-    log(LOG_INFO, "  -h          Show this help message");
-    log(LOG_INFO, "  -v          Display version information");
-    log(LOG_INFO, "  -p <port>   Set the POP3 port (default: 110)");
-    log(LOG_INFO, "  -P <port>   Set the DAJT port (default: 6969)");
-    log(LOG_INFO, "  -u <user>   Add a pop3 user in the format user:pass");
-    log(LOG_INFO, "  -U <user>   Add a dajt user in the format user:pass");
-    log(LOG_INFO, "  -d <path>   Set the mail directory path (default: ./Maildir)");
-    log(LOG_INFO, "  -t <path> <args...>  Set the transformation path and arguments (default: ./bin/usr/tr 'a-z' 'A-Z')");
+    printf("Usage: %s [options]\n", progName);
+    puts("Options:");
+    puts("  -h          Show this help message");
+    puts("  -v          Display version information");
+    puts("  -p <port>   Set the POP3 port (default: 1110)");
+    puts("  -P <port>   Set the DAJT port (default: 9090)");
+    puts("  -u <user>   Add a pop3 user in the format user:pass");
+    puts("  -U <user>   Add a dajt user in the format user:pass");
+    puts("  -d <path>   Set the mail directory path (default: ./Maildir)");
+    puts("  -t <path> <args...>  Set the transformation path and arguments (default: ./bin/usr/tr 'a-z' 'A-Z')");
 }
 
 void parse_args(const int argc, char** argv, Args* args)
@@ -68,8 +68,8 @@ void parse_args(const int argc, char** argv, Args* args)
     memset(args, 0, sizeof(*args));
 
     args->maildir_path = "./Maildir";
-    args->pop3_port = 110; // Default POP3 port
-    args->dajt_port = 6969; // Default DAJT port
+    args->pop3_port = 1110; // Default POP3 port
+    args->dajt_port = 9090; // Default DAJT port
 
     int c;
     args->quantity_users = 0;
