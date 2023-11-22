@@ -537,7 +537,6 @@ static void mail_buffer_to_client_buffer(Client* client){
     log(LOG_DEBUG, "Byte stuffing");
     size_t mail_len = 0;
     uint8_t * mbPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
-    // uint8_t * writeBufferWritePtr = buffer_write_ptr(&(client_data->socket_data->write_buffer), &len);
 
     uint8_t * newline;
     do {
@@ -549,11 +548,12 @@ static void mail_buffer_to_client_buffer(Client* client){
             mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
             size_t write_capacity = buffer_get_write_len(&(client->socket_data->write_buffer));;
             mail_len -= copied;
-            if (mail_len == 1) {
+            if (mail_len == 1 || write_capacity == 0) {
                     // Casos caos
                 break;
             } else if (mail_len >= 2 && newline && newline[1] == '.') {
                 if (write_capacity > 2) {
+                    // Caso byte stuffing
                     buffer_write(&(client->socket_data->write_buffer), '\n');
                     buffer_write(&(client->socket_data->write_buffer), '.');
                     buffer_write(&(client->socket_data->write_buffer), '.');
@@ -563,15 +563,13 @@ static void mail_buffer_to_client_buffer(Client* client){
                     break;
                 }
             } else {
-                if (write_capacity > 0) {
-                    buffer_write(&(client->socket_data->write_buffer), '\n');
-                    mbPtr = buffer_read_adv(&(client_data->mail_buffer), 1);
-                    mail_len -= 1;
-                } else {
-                    break;
-                }
+                // Caso falsa alarma  
+                buffer_write(&(client->socket_data->write_buffer), '\n');
+                mbPtr = buffer_read_adv(&(client_data->mail_buffer), 1);
+                mail_len -= 1;
             }
         } else { 
+            // Caso normal
             ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, mail_len);
             mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
             mail_len -= copied;
