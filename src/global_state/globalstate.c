@@ -5,11 +5,10 @@ GlobalState global_state = {
     .current_connections = 0,
     .total_connections = 0,
     .total_bytes_sent = 0,
-    .total_errors = 0,
     .transformation_path = NULL, 
     .transformation_path_len = 0,
     .transformations_enabled = false,
-    .current_buffer_size = 2048 
+    .current_buffer_size = 4096 
 };
 
 void set_transformation(char *raw_transformation) {

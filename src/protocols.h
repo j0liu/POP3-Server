@@ -26,6 +26,9 @@ enum pop3_state {
     ERROR,
 };
 
+#define FINISH_CONNECTION true
+#define CONTINUE_CONNECTION false
+
 /* Used by read and write */
 /* typedef struct CommandState {
     buffer *rb, *wb;

@@ -58,7 +58,7 @@ struct Client {
     Connection* connection;
     struct state_machine stm;
     ClientData* client_data;
-    parser* pop3parser;
+    parser* command_parser;
     
     SocketData* socket_data;
     uint8_t state;

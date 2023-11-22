@@ -8,7 +8,6 @@ typedef struct GlobalState {
     unsigned long total_connections;
     unsigned long current_connections;
     unsigned long total_bytes_sent;
-    unsigned long total_errors;
     bool transformations_enabled;
     char * transformation_path;
     size_t transformation_path_len;

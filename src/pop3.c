@@ -28,8 +28,6 @@
 extern Args args;
 extern GlobalState global_state;
 
-#define FINISH_CONNECTION true
-#define CONTINUE_CONNECTION false
 
 #define REGISTER_PENDING -2
 
@@ -351,11 +349,11 @@ CommandDescription available_commands[] = {
 };
 
 
-static int consume_pop3_buffer(parser* pop3parser, SocketData* socket_data)
+static int consume_pop3_buffer(parser* command_parser, SocketData* socket_data)
 {
     for (; buffer_can_read(&socket_data->read_buffer);) {
         const uint8_t c = socket_data_read(socket_data);
-        const parser_event* event = parser_feed(pop3parser, c);
+        const parser_event* event = parser_feed(command_parser, c);
         if (event == NULL) {
             return -1;
         }
@@ -373,7 +371,7 @@ static bool process_event(parser_event* event, Client* client)
 {
     // if (event->command_length + event->args_length > MAX_COMMAND_LENGTH) {
     //     socket_buffer_write(client_data->socket_data, ERR_COMMAND_TOO_LONG, sizeof ERR_COMMAND_TOO_LONG - 1);
-    //     return FINISH_CONNECTION;
+    //     return wTION;
     // }
 
     client->last_activity_time = time(NULL);
@@ -409,6 +407,7 @@ void welcome_init(const unsigned prev_state, const unsigned state, struct select
     uint8_t* ptr = buffer_write_ptr(wb, &len);
     strncpy((char*)ptr, SERVER_READY, len);
     buffer_write_adv(wb, sizeof SERVER_READY - 1);
+    log(LOG_INFO, NEW_POP3_CONNECTION);
 }
 
 // TODO: Ver de sacar?
@@ -461,19 +460,15 @@ static int process_read_buffer(Client* client) {
     int result = COMMAND_READ;
     buffer* rb = &client->socket_data->read_buffer;
     while (buffer_can_read(rb)) {
-        // if (difftime(time(NULL), client_data->last_activity_time) > INACTIVITY_TIMEOUT) {
-        //     socket_buffer_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
-        //     break;
-        // }
         logf(LOG_DEBUG, "buffer_can_read: %d", buffer_can_read(&client->socket_data->read_buffer));
 
-        if (consume_pop3_buffer(client->pop3parser, client->socket_data) == 0) {
+        if (consume_pop3_buffer(client->command_parser, client->socket_data) == 0) {
 
-            parser_event* event = parser_pop_event(client->pop3parser);
+            parser_event* event = parser_pop_event(client->command_parser);
             if (event != NULL) {
                 result = process_event(event, client);
                 free(event);
-                parser_reset(client->pop3parser);
+                parser_reset(client->command_parser);
                 if (result == CONTINUE_CONNECTION) {
                     log(LOG_DEBUG, "Continue connection");
                     return COMMAND_WRITE; 
@@ -676,7 +671,7 @@ unsigned command_write(struct selector_key* key)
     ClientData * client_data = client->client_data;
     CommandState * command_state = &client->command_state;
     log(LOG_DEBUG, "\n")
-    logf(LOG_INFO, "arrived to write r:%d s:%d m:%d rp:%d wp:%d", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
+    logf(LOG_DEBUG, "arrived to write r:%d s:%d m:%d rp:%d wp:%d", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
     
     int result_state = -1;
     if (command_state->command_index != -1) {
@@ -710,8 +705,8 @@ unsigned command_write(struct selector_key* key)
                 return COMMAND_WRITE;
             }
             //  selector_set_interest(key->s, client->socket_data->fd, OP_NOOP);
-            
-            return ERROR;
+            perror("send"); 
+            return DONE;
         }
         buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
 
@@ -749,12 +744,26 @@ unsigned command_write(struct selector_key* key)
 
 
 void done_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
+    Client * client = ATTACHMENT(key);
     log(LOG_DEBUG, "I'm done");
-    free_client(ATTACHMENT(key));
-    if (selector_unregister_fd(key->s, key->fd) != SELECTOR_SUCCESS) {
+    if (selector_unregister_fd(key->s, client->socket_data->fd) != SELECTOR_SUCCESS) {
         // TODO: Ver si esto esta ok
         abort();
     }
+    if (client->client_data->mail_fd != -1) {
+        selector_unregister_fd(key->s, client->client_data->mail_fd);
+        close(client->client_data->mail_fd);
+    }
+    if  (client->client_data->pop3_to_transf_fd != -1) {
+        selector_unregister_fd(key->s, client->client_data->mail_fd);
+        close(client->client_data->mail_fd);
+    }
+    if  (client->client_data->transf_to_pop3_fd != -1) {
+        selector_unregister_fd(key->s, client->client_data->transf_to_pop3_fd);
+        close(client->client_data->transf_to_pop3_fd);
+    }
+    free_client(client);
+
     global_state.current_connections--;
 }
 

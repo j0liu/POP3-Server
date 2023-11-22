@@ -107,7 +107,7 @@ int main(const int argc, char** argv)
         goto finally;
     }
 
-    logf(LOG_DEBUG, "Listening on TCP (POP 3) port %d", args.pop3_port);
+    logf(LOG_INFO, "Listening on TCP (POP 3) port %d", args.pop3_port);
 
     // DAJT socket setup
     struct sockaddr_in6 addr_dajt;
@@ -147,7 +147,7 @@ int main(const int argc, char** argv)
         goto finally;
     }
 
-    logf(LOG_DEBUG, "Listening on TCP (DAJT) port %d", args.dajt_port);
+    logf(LOG_INFO, "Listening on TCP (DAJT) port %d", args.dajt_port);
 
     // Selector setup
     const struct selector_init conf = {

@@ -1,6 +1,6 @@
 #include "logger.h"
 
-LOG_LEVEL current_level = LOG_ERROR;
+LOG_LEVEL current_level = LOG_DEBUG;
 static const char *description[] = {"DEBUG", "INFO", "ERROR", "FATAL"};
 
 void set_log_level(LOG_LEVEL newLevel)

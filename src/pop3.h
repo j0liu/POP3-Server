@@ -40,6 +40,8 @@
 #define OK_QUIT (OK " POP3 Party over (%d messages left)" CRLF)
 #define OK_QUIT_EMPTY (OK " POP3 Party over (maildrop empty)" CRLF)
 
+#define NEW_POP3_CONNECTION "New POP3 connection"
+
 void welcome_init(const unsigned prev_state, const unsigned state, struct selector_key* key);
 void welcome_close(const unsigned state, struct selector_key* key);
 unsigned welcome_write(struct selector_key* key);

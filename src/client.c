@@ -54,7 +54,7 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
     stm_init(&client->stm);
 
     extern parser_definition pop3_parser_definition;
-    client->pop3parser = parser_init(&pop3_parser_definition);
+    client->command_parser = parser_init(&pop3_parser_definition);
 
     client->socket_data = initialize_socket_data(client_fd, global_state.current_buffer_size); 
     client->state = AUTHORIZATION;
@@ -85,7 +85,7 @@ void free_client(Client* client)
     free_socket_data(client->socket_data);
     free_client_data(client->client_data);
     free(client->connection);
-    parser_destroy(client->pop3parser);
+    parser_destroy(client->command_parser);
     free(client);
     
 }

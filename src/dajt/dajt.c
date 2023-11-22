@@ -12,14 +12,13 @@
 extern Args args;
 extern GlobalState global_state;
 
-#define MIN_BUFFER_SIZE 1 
+#define MIN_BUFFER_SIZE 1 << 7 
 #define MAX_BUFFER_SIZE 1 << 20 
 
-// TODO: Mover
-#define FINISH_CONNECTION true
-#define CONTINUE_CONNECTION false
-
 #define REGISTER_PENDING -2
+#define STAT_TOTAL_BYTES 'b'
+#define STAT_CURRENT_CONNECTIONS 'c'
+#define STAT_TOTAL_CONNECTIONS 't'
 
 static int auth_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
@@ -61,27 +60,23 @@ static int first_argument_to_int(Client* client, char* commandParameters)
             return num;
         }
     }
-    char buff[100] = { 0 }; // TODO: Improve
+    char buff[64] = { 0 }; // TODO: Improve
     if (num <= 0 || endptr == commandParameters) {
-        len = sprintf(buff, ERR_INVALID_NUMBER, commandParameters != NULL ? commandParameters : "");
+        memcpy(buff, ERR_INVALID_NUMBER_DAJT, sizeof ERR_INVALID_NUMBER_DAJT - 1);
     } else if (*endptr != '\0') {
-        len = sprintf(buff, ERR_NOISE, endptr);
-    } else if (num > client->client_data->mail_count) {
-        len = sprintf(buff, NO_MESSAGE_LIST, num);
+        memcpy(buff, ERR_NOISE, sizeof ERR_NOISE - 1);
     }
     socket_buffer_write(client->socket_data, buff, len);
     return -1;
 }
 
 
-// user token
 static int buff_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
     if (parameters_length == 0) {
         size_t len = buffer_get_write_len(&client->socket_data->write_buffer);
         char buffer[190] = {0};
-        int buffLen = sprintf(buffer, GET_BUFFER_DAJT, global_state.current_buffer_size);
+        int buffLen = sprintf(buffer, OK_NUMBER_DAJT, global_state.current_buffer_size);
         if (buffLen <= (int) len) {
-            client->command_state.finished = true;  
             socket_buffer_write(client->socket_data, buffer, buffLen);
             client->command_state.finished = true; 
         }
@@ -90,9 +85,9 @@ static int buff_handler(Client * client, char* commandParameters, uint8_t parame
         if (arg < 0) {
             log(LOG_ERROR, "Error");
             return ERROR;
-            // TODO: Manejar error 
+            // TODO: Manejar error?
         }
-        if (socket_buffer_write(client->socket_data, SET_BUFFER_DAJT, sizeof SET_BUFFER_DAJT - 1)) {
+        if (socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1)) {
             global_state.current_buffer_size = arg;
             client->command_state.finished = true; 
         }
@@ -101,10 +96,30 @@ static int buff_handler(Client * client, char* commandParameters, uint8_t parame
 }
 
 static int stat_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
+    if (parameters_length == 0 || parameters_length > 1) {
+        socket_buffer_write(client->socket_data, ERR_INVALID_STAT_DAJT, sizeof ERR_INVALID_STAT_DAJT - 1);
+        return ERROR;
+    }
     size_t len = buffer_get_write_len(&client->socket_data->write_buffer);
     // TODO: Manejar tamaño del buffer
+    int result;
+    switch (commandParameters[0])
+    {
+    case STAT_TOTAL_BYTES:
+        result = global_state.total_bytes_sent;
+        break;
+    case STAT_CURRENT_CONNECTIONS:
+        result = global_state.current_connections;
+        break;
+    case STAT_TOTAL_CONNECTIONS:
+        result = global_state.total_connections;
+        break;
+    default:
+        socket_buffer_write(client->socket_data, ERR_INVALID_STAT_DAJT, sizeof ERR_INVALID_STAT_DAJT - 1);
+        return ERROR;
+    }
     char buffer[190] = {0};
-    int buffLen = sprintf(buffer, GET_STATS_DAJT, global_state.total_bytes_sent, global_state.current_connections, global_state.total_connections, global_state.total_errors);
+    int buffLen = sprintf(buffer, OK_NUMBER_DAJT, result);
     if (buffLen <= (int) len) {
         client->command_state.finished = true;  
         socket_buffer_write(client->socket_data, buffer, buffLen);
@@ -119,11 +134,26 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
 }
 
 static int ttra_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
-    if (!global_state.transformations_enabled && global_state.transformation_path == NULL) {
-        log(LOG_ERROR, "no transformations");
+    if (parameters_length == 0) {
+        char buffer[190] = {0};
+        int buffLen = sprintf(buffer, OK_NUMBER_DAJT, global_state.transformations_enabled);
+        if (buffLen <= (int) buffer_get_write_len(&client->socket_data->write_buffer)) {
+            socket_buffer_write(client->socket_data, buffer, buffLen);
+            client->command_state.finished = true; 
+        }
+        return COMMAND_WRITE;
+    }
+    if (parameters_length > 1 || (commandParameters[0] != '0' && commandParameters[0] != '1')) {
+        socket_buffer_write(client->socket_data, ERR_INVALID_TTRA_DAJT, sizeof ERR_INVALID_TTRA_DAJT - 1);
         return ERROR;
     }
-    global_state.transformations_enabled = !global_state.transformations_enabled;
+    if (global_state.transformation_path == NULL) {
+        log(LOG_ERROR, "no transformations");
+        socket_buffer_write(client->socket_data, ERR_NO_TRANSFORMATIONS_SET_DAJT, sizeof ERR_NO_TRANSFORMATIONS_SET_DAJT - 1);
+        return ERROR;
+    }
+
+    global_state.transformations_enabled = commandParameters[0] == '1'; 
     socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
     client->command_state.finished = true; 
     return COMMAND_WRITE; 
@@ -139,8 +169,6 @@ static int tran_handler(Client * client, char* commandParameters, uint8_t parame
         size_t written_count = sprintf((char *)wbuffer, "%d: %s ", global_state.transformations_enabled, global_state.transformation_path);
         buffer_write_adv(&client->socket_data->write_buffer, written_count);
         // TODO: Garantizar tamaño minimo del buffer
-    } else {
-        socket_buffer_write(client->socket_data, NO_TRANSFORMATIONS_SET_DAJT, sizeof NO_TRANSFORMATIONS_SET_DAJT - 1);
     }
     client->command_state.finished = true; 
     return COMMAND_WRITE; 
@@ -154,16 +182,15 @@ CommandDescription dajt_available_commands[] = {
     { .name = "TRAN", .handler = tran_handler, .valid_states = TRANSACTION },
     { .name = "BUFF", .handler = buff_handler, .valid_states = TRANSACTION },
     { .name = "STAT", .handler = stat_handler, .valid_states = TRANSACTION },
-    { .name = "IDLE", .handler = NULL, .valid_states = TRANSACTION },
     { .name = "QUIT", .handler = quit_handler, .valid_states = AUTHORIZATION | TRANSACTION },
 };
 
 
-static int consume_pop3_buffer(parser* pop3parser, SocketData* socket_data)
+static int consume_dajt_buffer(parser* dajtParser, SocketData* socket_data)
 {
     for (; buffer_can_read(&socket_data->read_buffer);) {
         const uint8_t c = socket_data_read(socket_data);
-        const parser_event* event = parser_feed(pop3parser, c);
+        const parser_event* event = parser_feed(dajtParser, c);
         if (event == NULL) {
             return -1;
         }
@@ -213,7 +240,7 @@ void welcome_dajt_init(const unsigned prev_state, const unsigned state, struct s
     uint8_t* ptr = buffer_write_ptr(wb, &len);
     strncpy((char*)ptr, SERVER_READY_DAJT, len);
     buffer_write_adv(wb, sizeof SERVER_READY_DAJT - 1);
-
+    log(LOG_INFO, NEW_DAJT_CONNECTION);
 }
 unsigned welcome_dajt_write(struct selector_key* key){
     buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
@@ -240,9 +267,35 @@ unsigned welcome_dajt_write(struct selector_key* key){
     return COMMAND_READ;
 }
 
-// void welcome_dajt_close(const unsigned state, struct selector_key* key){
+static int process_read_buffer(Client* client) {
+    int result = COMMAND_READ;
+    buffer* rb = &client->socket_data->read_buffer;
+    while (buffer_can_read(rb)) {
+        logf(LOG_DEBUG, "buffer_can_read: %d", buffer_can_read(&client->socket_data->read_buffer));
 
-// }
+        if (consume_dajt_buffer(client->command_parser, client->socket_data) == 0) {
+
+            parser_event* event = parser_pop_event(client->command_parser);
+            if (event != NULL) {
+                result = process_event(event, client);
+                free(event);
+                parser_reset(client->command_parser);
+                if (result == CONTINUE_CONNECTION) {
+                    log(LOG_DEBUG, "Continue connection");
+                    return COMMAND_WRITE; 
+                }
+
+                // TODO: Manejar errores
+                if (result == FINISH_CONNECTION) {
+                    log(LOG_ERROR, "Error!");
+                    return ERROR; 
+                }
+            }
+        }
+    }
+    return result; 
+}
+
 
 unsigned command_dajt_read(struct selector_key* key){
     Client * client = ATTACHMENT(key);
@@ -259,37 +312,9 @@ unsigned command_dajt_read(struct selector_key* key){
     buffer_write_adv(rb, read_count);
     rbPtr = buffer_read_ptr(rb, &len);
 
-    int result;
+    int result = process_read_buffer(client);
 
-    while (buffer_can_read(rb)) {
-        // if (difftime(time(NULL), client_data->last_activity_time) > INACTIVITY_TIMEOUT) {
-        //     socket_buffer_write(client_data->socket_data, ERR_INACTIVITY_TIMEOUT, sizeof ERR_INACTIVITY_TIMEOUT - 1);
-        //     break;
-        // }
-        
-        logf(LOG_DEBUG, "buffer_can_read: %d", buffer_can_read(&client->socket_data->read_buffer));
-
-        if (consume_pop3_buffer(client->pop3parser, client->socket_data) == 0) {
-
-            parser_event* event = parser_pop_event(client->pop3parser);
-            if (event != NULL) {
-                result = process_event(event, client);
-                free(event);
-                parser_reset(client->pop3parser);
-                if (result == CONTINUE_CONNECTION) {
-                    log(LOG_DEBUG, "Continue connection");
-                    return COMMAND_WRITE; 
-                }
-
-                // TODO: Manejar errores
-                if (result == FINISH_CONNECTION) {
-                    log(LOG_ERROR, "Error!");
-                    return ERROR; 
-                }
-            }
-        }
-    }
-    return COMMAND_READ;
+    return result;
 }
 void command_dajt_read_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key){
     if(prev_state != state) {
@@ -325,7 +350,7 @@ unsigned command_dajt_write(struct selector_key* key){
         // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
         //     return ERROR;
         // }
-        return COMMAND_READ;
+        result_state = process_read_buffer(client);
     }
     log(LOG_DEBUG, "Exiting command write");
     return result_state != -1? result_state : COMMAND_WRITE; 

@@ -6,16 +6,16 @@
 #include "pop3.h"
 #include "protocols.h"
 #include "selector.h"
+#include "logger/logger.h"
 
 static void stm_read(struct selector_key* key);
 static void stm_write(struct selector_key* key);
-static void stm_close(struct selector_key* key);
 
 static const struct fd_handler stm_handler = {
     .handle_read = stm_read,
     .handle_write = stm_write,
     .handle_block = NULL,
-    .handle_close = stm_close,
+    .handle_close = NULL,
 };
 
 static void accept_passive_sockets(struct selector_key* key, bool pop3);
@@ -87,26 +87,6 @@ stm_write(struct selector_key* key)
     //     pop3_done(key);
     // }
 }
-
-static void
-stm_close(struct selector_key* key)
-{
-    // free_client(ATTACHMENT(key));
-}
-
-// static void
-// pop3_done(struct selector_key* key)
-// {
-//     int fd = ATTACHMENT(key)->connection->fd;
-
-//     if (fd != -1) {
-//         if (SELECTOR_SUCCESS != selector_unregister_fd(key->s, fd)) {
-//             abort();
-//         }
-//         close(fd);
-//     }
-//     // Free
-// }
 
 void register_fd(struct selector_key* key, int fd, fd_interest interest, void * data) {
     selector_register(key->s, fd, &stm_handler, interest, data);
