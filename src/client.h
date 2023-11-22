@@ -40,6 +40,7 @@ typedef struct ClientData {
     bool byte_stuffing;
     int pop3_to_transf_fd;
     int transf_to_pop3_fd;
+    bool last_carriage_return;
 } ClientData;
 
 typedef struct CommandDescription {

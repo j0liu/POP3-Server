@@ -264,11 +264,12 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         return REGISTER_PENDING;
     }  else if (num == EMAIL_FINISHED) {
         close(client_data->mail_fd);
-        log(LOG_DEBUG, "Closing mail");
+        log(LOG_INFO, "Closing mail");
         // Send terminating sequence
         client_data->current_mail = NO_EMAIL;
         client_data->mail_fd = -1;
         client_data->byte_stuffing = false;
+        client_data->last_carriage_return = false;
         if (client_data->pop3_to_transf_fd != -1) {
             close(client_data->pop3_to_transf_fd);
             close(client_data->transf_to_pop3_fd);
@@ -543,15 +544,22 @@ static void mail_buffer_to_client_buffer(Client* client){
         if (newline != NULL) {
             size_t offset = newline - mbPtr;
             ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, offset); // Excluimos el \n para mantener el contexto
+            if (copied > 0)
+                client_data->last_carriage_return = mbPtr[copied - 1] == '\r';
             mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
-            size_t write_capacity = buffer_get_write_len(&(client->socket_data->write_buffer));;
+            size_t write_capacity = buffer_get_write_len(&(client->socket_data->write_buffer));
             mail_len -= copied;
             if (mail_len == 1 || write_capacity == 0) {
                     // Casos caos
                 break;
             } else if (mail_len >= 2 && newline && newline[1] == '.') {
-                if (write_capacity > 2) {
+                if ((write_capacity > 3 && !client_data->last_carriage_return) || (write_capacity > 2 && client_data->last_carriage_return)) {
                     // Caso byte stuffing
+                    if (!client_data->last_carriage_return) {
+                        buffer_write(&(client->socket_data->write_buffer), '\r');
+                    } else {
+                        client_data->last_carriage_return = false;
+                    }
                     buffer_write(&(client->socket_data->write_buffer), '\n');
                     buffer_write(&(client->socket_data->write_buffer), '.');
                     buffer_write(&(client->socket_data->write_buffer), '.');
@@ -562,6 +570,12 @@ static void mail_buffer_to_client_buffer(Client* client){
                 }
             } else {
                 // Caso falsa alarma  
+                if (!client_data->last_carriage_return) {
+                    if (write_capacity < 2) break;
+                    buffer_write(&(client->socket_data->write_buffer), '\r');
+                } else {
+                    client_data->last_carriage_return = false;
+                }
                 buffer_write(&(client->socket_data->write_buffer), '\n');
                 mbPtr = buffer_read_adv(&(client_data->mail_buffer), 1);
                 mail_len -= 1;
@@ -569,6 +583,8 @@ static void mail_buffer_to_client_buffer(Client* client){
         } else { 
             // Caso normal
             ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mbPtr, mail_len);
+            if (copied > 0)
+                client_data->last_carriage_return = mbPtr[copied - 1] == '\r';
             mbPtr = buffer_read_adv(&(client_data->mail_buffer), copied);
             mail_len -= copied;
         }
