@@ -68,8 +68,6 @@ static const struct state_definition client_statbl_dajt[] = {
     {
         .state = WELCOME,
         .on_arrival = welcome_dajt_init,
-        // TODO: Ver si es necesario
-        // .on_departure = welcome_dajt_close,
         .on_write_ready = welcome_dajt_write,
     },
     {
@@ -81,7 +79,6 @@ static const struct state_definition client_statbl_dajt[] = {
         .state = COMMAND_WRITE,
         .on_arrival = command_dajt_write_arrival,
         .on_write_ready = command_dajt_write,
-        // .on_read_ready = command_dajt_write,
     },
     {
         .state = DONE,

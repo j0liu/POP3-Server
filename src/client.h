@@ -64,7 +64,7 @@ struct Client {
     uint8_t state;
     struct User* user;
     // time_t last_activity_time;
-    int clientIndex;
+    int client_index;
 
     CommandState command_state;
 };

@@ -1,5 +1,6 @@
 #include "globalstate.h"
 #include <string.h>
+#include "../logger/logger.h"
 
 GlobalState global_state = {
     .current_connections = 0,
@@ -22,7 +23,7 @@ bool add_client(Client * client) {
     for(int i = global_state.total_clients % MAX_CLIENTS; i < MAX_CLIENTS; i = (i + 1) % MAX_CLIENTS) {
         if (global_state.clients[i] == NULL) {
             global_state.clients[i] = client;
-            client->clientIndex = i;
+            client->client_index = i;
             global_state.total_clients++;  
             return true;
         }
@@ -32,10 +33,13 @@ bool add_client(Client * client) {
 
 void remove_client(Client * client) {
     if (client == NULL) return;
-    if (global_state.clients[client->clientIndex] != NULL) {
-        global_state.clients[client->clientIndex] = NULL;
+    logf(LOG_INFO, "Removing client %d...", client->client_index);
+    if (global_state.clients[client->client_index] != NULL) {
+        global_state.clients[client->client_index] = NULL;
         global_state.total_clients--;
+        int client_index = client->client_index;
         free_client(client);
+        logf(LOG_INFO, "Client %d removed", client_index);
     }
 }
 

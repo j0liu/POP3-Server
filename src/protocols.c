@@ -74,24 +74,14 @@ fail:
 static void stm_read(struct selector_key* key)
 {
     struct state_machine* stm = &ATTACHMENT(key)->stm;
-    // const enum pop3_state st = 
     stm_handler_read(stm, key);
-
-    // if (ERROR == st || DONE == st) {
-    //     pop3_done(key);
-    // }
 }
 
 static void
 stm_write(struct selector_key* key)
 {
     struct state_machine* stm = &ATTACHMENT(key)->stm;
-    // const enum pop3_state st = 
     stm_handler_write(stm, key);
-
-    // if (ERROR == st || DONE == st) {
-    //     pop3_done(key);
-    // }
 }
 
 void register_fd(struct selector_key* key, int fd, fd_interest interest, void * data) {

@@ -72,8 +72,6 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
         socket_buffer_write(client->socket_data, buff, len);
     }
 
-    free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
-
     return DONE;
 }
 
@@ -744,7 +742,6 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
     Client * client = ATTACHMENT(key);
     log(LOG_DEBUG, "I'm done");
     if (selector_unregister_fd(key->s, client->socket_data->fd) != SELECTOR_SUCCESS) {
-        // TODO: Ver si esto esta ok
         abort();
     }
     if (client->client_data->mail_fd != -1) {

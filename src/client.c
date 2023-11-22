@@ -29,6 +29,9 @@ static ClientData* initialize_pop3_client_data()
 
 void free_client_data(ClientData* client_data)
 {
+    if (client_data == NULL) return;
+    free_mail_info_list(client_data->mail_info_list, client_data->mail_count);
+    free(client_data->mail_buffer.data);
     free(client_data);
 }
 

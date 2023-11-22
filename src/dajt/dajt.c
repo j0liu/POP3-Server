@@ -63,10 +63,13 @@ static int first_argument_to_int(Client* client, char* commandParameters)
     char buff[64] = { 0 }; // TODO: Improve
     if (num <= 0 || endptr == commandParameters) {
         memcpy(buff, ERR_INVALID_NUMBER_DAJT, sizeof ERR_INVALID_NUMBER_DAJT - 1);
+        len = sizeof ERR_INVALID_NUMBER_DAJT - 1;
     } else if (*endptr != '\0') {
-        memcpy(buff, ERR_NOISE, sizeof ERR_NOISE - 1);
+        memcpy(buff, ERR_NOISE_DAJT, sizeof ERR_NOISE_DAJT - 1);
+        len = sizeof ERR_NOISE_DAJT - 1;
     } else {
         memcpy(buff, ERR_INVALID_BUFFER_DAJT, sizeof ERR_INVALID_BUFFER_DAJT - 1);
+        len = sizeof ERR_INVALID_BUFFER_DAJT - 1;
     }
     socket_buffer_write(client->socket_data, buff, len);
     return -1;
@@ -131,7 +134,6 @@ static int stat_handler(Client * client, char* commandParameters, uint8_t parame
 
 static int quit_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
     socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
-    client->command_state.finished = true; 
     return DONE; 
 }
 
@@ -364,12 +366,12 @@ void command_dajt_write_arrival(const unsigned prev_state, const unsigned state,
 }
 
 void done_dajt_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key){
+    Client * client = ATTACHMENT(key);
     log(LOG_DEBUG, "I'm d(ajt)one");
-    free_client(ATTACHMENT(key));
-    if (selector_unregister_fd(key->s, key->fd) != SELECTOR_SUCCESS) {
-        // TODO: Ver si esto esta ok
+    if (selector_unregister_fd(key->s, client->socket_data->fd) != SELECTOR_SUCCESS) {
         abort();
     }
+    remove_client(ATTACHMENT(key));
 }
 
 unsigned error_dajt_write(struct selector_key* key){

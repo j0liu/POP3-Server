@@ -20,6 +20,7 @@ struct parser {
 void parser_destroy(struct parser* p)
 {
     if (p != NULL) {
+        if (p->eventToReturn != NULL) free(p->eventToReturn);
         free(p);
     }
 }
