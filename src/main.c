@@ -27,14 +27,17 @@
 bool done = false;
 extern GlobalState global_state;
 
-static void sigterm_handler(const int signal)
-{
-    logf(LOG_DEBUG, "Signal %d, cleaning up and exiting", signal);
+static void cleanup() {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (global_state.clients[i] != NULL) {
             remove_client(global_state.clients[i]);
         }
     }
+}
+
+static void sigterm_handler(const int signal)
+{
+    logf(LOG_DEBUG, "Signal %d, cleaning up and exiting", signal);
     done = true;
 }
 
@@ -211,6 +214,7 @@ int main(const int argc, char** argv)
         }
     }
 
+    cleanup();
     if (err_msg == NULL) {
         err_msg = "Closing...";
     }

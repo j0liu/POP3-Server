@@ -173,11 +173,11 @@ static int list_handler(Client* client, char* commandParameters, uint8_t paramet
             socket_buffer_write(client->socket_data, buff, len);
         }
 
-        if (!client_data->mail_info_list[client_data->list_current_mail].deleted) {
+        if (client_data->mail_count > 0 && !client_data->mail_info_list[client_data->list_current_mail].deleted) {
             int len = sprintf(buff, "%d %ld" CRLF, client_data->list_current_mail + 1, client_data->mail_info_list[client_data->list_current_mail].size);
             socket_buffer_write(client->socket_data, buff, len);
+            client_data->list_current_mail++;
         }
-        client_data->list_current_mail++;
         if (client_data->list_current_mail == client_data->mail_count) {
             client_data->list_current_mail = 0;
             socket_buffer_write(client->socket_data, TERMINATION, sizeof TERMINATION - 1);

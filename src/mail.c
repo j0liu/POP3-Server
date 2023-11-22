@@ -57,8 +57,10 @@ MailInfo* get_mail_info_list(const char* directory_path, int* size, const char* 
     if (directory_path[0] == '/') {
         snprintf(user_mail_path, MAX_PATH_LENGTH, "%s/%s", directory_path, username);
     } else {
-        char* base_path = dirname(dirname(strdup(__FILE__))); // Two levels up from this file
+        char *file = strdup(__FILE__);
+        char* base_path = dirname(dirname(file)); // Two levels up from this file
         snprintf(user_mail_path, MAX_PATH_LENGTH, "%s/%s/%s", base_path, directory_path, username);
+        free(file);
     }
 
     char cur_path[PATH_MAX], new_path[PATH_MAX];
