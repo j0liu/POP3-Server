@@ -9,3 +9,4 @@ strace_output.txt
 user/
 transformer*
 pop3d
+src/client/kerl
