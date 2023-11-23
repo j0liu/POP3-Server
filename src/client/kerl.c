@@ -73,7 +73,7 @@ int handle_ttra(const char* path)
 int handle_tran(const char* path, const char* body)
 {
     int path_len = strlen(path);
-    if (body[0] == '\0' || (path_len > 0 && path[0] != '/')) {
+    if (path_len > 0 && path[0] != '/') {
         err_msg = "Invalid argument for TRAN command. Usage: TRAN -body \"commands\"";
         return 1;
     }
@@ -265,6 +265,9 @@ int main(int argc, char* argv[])
     if (bytes_received < 0) {
         err_msg = "Error receiving response from server.";
         goto client_error;
+    } else if (strncmp(response, "<ERR", 4) == 0) {
+        err_msg = "Invalid credentials.";
+        goto client_error;
     }
 
     if (send(sockfd, command, strlen(command), 0) < 0) {
@@ -297,7 +300,7 @@ parsing_error:
 
 addr_error:
     printf("%s\n", err_msg);
-    freeaddrinfo(res);
+    // freeaddrinfo(res);
     return 1;
 
 client_error:

@@ -400,7 +400,9 @@ static bool process_event(parser_event* event, Client* client)
 void welcome_init(const unsigned prev_state, const unsigned state, struct selector_key* key)
 {
     buffer* wb = &(ATTACHMENT(key)->socket_data->write_buffer);
-    global_state.total_connections++;
+    if (global_state.total_connections + 1 != 0)
+        global_state.total_connections++;
+    
     global_state.current_connections++;
 
     // Agregamos el mensaje de bienvenida
@@ -433,7 +435,8 @@ unsigned welcome_write(struct selector_key* key)
     }
 
     // Estadistica de bytes transferidos
-    global_state.total_bytes_sent += sent_count;
+    if (sent_count > 0 && global_state.total_bytes_sent + sent_count > global_state.total_bytes_sent)
+        global_state.total_bytes_sent += sent_count;
 
     buffer_read_adv(wb, sent_count);
     // Si no pude mandar el mensaje de bienvenida completo, vuelve a intentar
@@ -595,11 +598,13 @@ static void mail_buffer_to_client_buffer(Client* client){
     } while(newline != NULL && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer)));
 }
 
+#define BUFFER_SIZE 65536 
+
 static int mail_file_to_pipe(struct selector_key* key, Client* client) {
     log(LOG_DEBUG, "reading mail to pipe");
     ClientData * client_data = client->client_data;
-    uint8_t buff[1024] = {0}; // TODO: Poner una variable estatica con tamaño maximo del pipe?
-    ssize_t read_count = read(client_data->mail_fd, buff, 1024);
+    static uint8_t buff[BUFFER_SIZE];
+    ssize_t read_count = read(client_data->mail_fd, buff, BUFFER_SIZE);
     logf(LOG_DEBUG, "Read %ld from mail", read_count);
     if (read_count > 0) {
         ssize_t written_count = write(client_data->pop3_to_transf_fd, buff, read_count);
@@ -726,6 +731,7 @@ unsigned command_write(struct selector_key* key)
         buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
 
         // Estadistica de bytes transferidos
+    if (sent_count > 0 && global_state.total_bytes_sent + sent_count > global_state.total_bytes_sent)
         global_state.total_bytes_sent += sent_count;
     }
 
@@ -802,7 +808,8 @@ unsigned error_write(struct selector_key* key) {
     }
 
     // Estadistica de bytes transferidos
-    global_state.total_bytes_sent += sent_count;
+    if (sent_count > 0 && global_state.total_bytes_sent + sent_count > global_state.total_bytes_sent)
+        global_state.total_bytes_sent += sent_count;
 
     // Si se termino de escribir el error
     if (!buffer_can_read(&(client->socket_data->write_buffer))) {

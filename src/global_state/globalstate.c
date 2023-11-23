@@ -9,7 +9,7 @@ GlobalState global_state = {
     .transformation_path = NULL, 
     .transformation_path_len = 0,
     .transformations_enabled = false,
-    .current_buffer_size = 4096,
+    .current_buffer_size = 8192, 
     .clients = {0}, 
     .total_clients = 0
 };
