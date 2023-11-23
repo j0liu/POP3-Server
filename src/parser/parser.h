@@ -20,7 +20,7 @@ typedef struct parser_definition parser_definition;
 typedef void (*parser_action)(struct parser_event* ret, const uint8_t c);
 
 #define COMMAND_LENGTH 4
-#define ARGS_LENGTH 81
+#define ARGS_LENGTH 255 
 #define MAX_COMMAND_LENGTH COMMAND_LENGTH + ARGS_LENGTH
 
 /**
