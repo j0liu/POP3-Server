@@ -67,6 +67,7 @@ struct Client {
     // time_t last_activity_time;
     int client_index;
 
+    bool exiting;
     CommandState command_state;
 };
 

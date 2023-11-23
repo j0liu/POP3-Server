@@ -45,6 +45,7 @@ Client* new_client(int client_fd, struct sockaddr_in6* client_addr, socklen_t cl
     client->connection = malloc(sizeof(Connection));
     client->connection->fd = client_fd;
     client->connection->addrlen = client_addr_len;
+    client->exiting = false;
     memcpy(&client->connection->addr, client_addr, client_addr_len);
 
     struct state_machine stm = {

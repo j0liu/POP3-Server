@@ -134,7 +134,9 @@ static int stat_handler(Client * client, char* commandParameters, uint8_t parame
 
 static int quit_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
     socket_buffer_write(client->socket_data, OKCRLF_DAJT, sizeof OKCRLF_DAJT - 1);
-    return DONE; 
+    client->exiting = true;
+    client->command_state.finished = true;
+    return COMMAND_WRITE; 
 }
 
 static int ttra_handler(Client * client, char* commandParameters, uint8_t parameters_length) {
@@ -332,7 +334,7 @@ unsigned command_dajt_write(struct selector_key* key){
     CommandState * command_state = &client->command_state;
     
     int result_state = -1;
-    if (command_state->command_index != -1) {
+    if (command_state->command_index != -1 && !command_state->finished) {
         result_state = dajt_available_commands[command_state->command_index].handler(client, command_state->arguments, command_state->argLen);
     }
 
@@ -347,6 +349,8 @@ unsigned command_dajt_write(struct selector_key* key){
     }
 
     if (client->command_state.finished && !buffer_can_read(&(client->socket_data->write_buffer))) {
+        if (client->exiting)
+            return DONE;
         client->command_state.command_index = -1;
         client->command_state.argLen = 0;
         client->command_state.finished = false;
@@ -381,7 +385,7 @@ unsigned error_dajt_write(struct selector_key* key){
     uint8_t* ptr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
     ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
 
-    if (sent_count == -1) return ERROR;
+    if (sent_count < (ssize_t) len) return ERROR;
 
     buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
     if (!buffer_can_read(&(client->socket_data->write_buffer))) {

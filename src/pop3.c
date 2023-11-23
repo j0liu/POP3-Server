@@ -49,7 +49,9 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
     ClientData* client_data = client->client_data;
     if (client->state == AUTHORIZATION) {
         socket_buffer_write(client->socket_data, OK_QUIT_NO_AUTH, sizeof OK_QUIT_NO_AUTH - 1);
-        return DONE;
+        client->command_state.finished = true;
+        client->exiting = true;
+        return COMMAND_WRITE;
     }
 
     client->state = UPDATE;
@@ -71,8 +73,10 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
         int len = sprintf(buff, OK_QUIT, client_data->mail_count_not_deleted);
         socket_buffer_write(client->socket_data, buff, len);
     }
+    client->command_state.finished = true;
+    client->exiting = true;
 
-    return DONE;
+    return COMMAND_WRITE;
 }
 
 static int user_handler(Client * client, char* commandParameters, uint8_t parameters_length)
@@ -685,7 +689,7 @@ unsigned command_write(struct selector_key* key)
     logf(LOG_DEBUG, "arrived to write r:%d s:%d m:%d rp:%d wp:%d", key->fd, client->socket_data->fd, client_data->mail_fd, client_data->transf_to_pop3_fd, client_data->pop3_to_transf_fd);
     
     int result_state = -1;
-    if (command_state->command_index != -1) {
+    if (command_state->command_index != -1 && !command_state->finished) {
         log(LOG_DEBUG, "handling!!");
         result_state = available_commands[command_state->command_index].handler(client, command_state->arguments, command_state->argLen);
         if (result_state == REGISTER_PENDING) {
@@ -741,6 +745,8 @@ unsigned command_write(struct selector_key* key)
 
     if (client->command_state.finished && !buffer_can_read(&(client->socket_data->write_buffer))) {
         log(LOG_DEBUG, "command finished, going to command read");
+        if (client->exiting)
+            return DONE;
         client->command_state.command_index = -1;
         client->command_state.argLen = 0;
         client->command_state.finished = false;
@@ -785,13 +791,20 @@ unsigned error_write(struct selector_key* key) {
     uint8_t* ptr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
     ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
 
-    if (sent_count == -1) return ERROR;
+    if (sent_count == -1) {
+        return DONE;
+    } 
+
 
     buffer_read_adv(&(client->socket_data->write_buffer), sent_count);
+    if (sent_count < (ssize_t) len) {
+        return ERROR;
+    }
 
     // Estadistica de bytes transferidos
     global_state.total_bytes_sent += sent_count;
 
+    // Si se termino de escribir el error
     if (!buffer_can_read(&(client->socket_data->write_buffer))) {
         // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
         //     return ERROR;
