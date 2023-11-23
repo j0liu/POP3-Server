@@ -10,3 +10,4 @@ user/
 transformer*
 pop3d
 src/client/kerl
+user/*
