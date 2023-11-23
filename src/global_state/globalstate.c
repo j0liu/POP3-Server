@@ -33,8 +33,8 @@ bool add_client(Client * client) {
 
 void remove_client(Client * client) {
     if (client == NULL) return;
-    logf(LOG_INFO, "Removing client %d...", client->client_index);
     if (global_state.clients[client->client_index] != NULL) {
+        logf(LOG_INFO, "Removing client %d...", client->client_index);
         global_state.clients[client->client_index] = NULL;
         global_state.total_clients--;
         int client_index = client->client_index;

@@ -24,6 +24,7 @@ static ClientData* initialize_pop3_client_data()
     client_data->pop3_to_transf_fd = -1;
     client_data->transf_to_pop3_fd = -1;
     client_data->last_carriage_return = false;
+    client_data->crlf_end = false;
     buffer_init(&client_data->mail_buffer, global_state.current_buffer_size, malloc(global_state.current_buffer_size)); 
     return client_data;
 }

@@ -30,7 +30,8 @@
 #define INVALID_NUMBER_LIST (ERR " Invalid message number: %d" CRLF)
 // RETR
 #define NO_SUCH_MESSAGE (ERR " No such message" CRLF)
-#define RETR_TERMINATION (CRLF "." CRLF)
+#define LF_RETR_TERMINATION ("\n." CRLF)
+#define CRLF_RETR_TERMINATION (CRLF "." CRLF)
 // DELE
 #define OK_DELE (OK " Marked to be deleted." CRLF)
 #define MESSAGE_IS_DELETED (ERR " Message is deleted." CRLF)

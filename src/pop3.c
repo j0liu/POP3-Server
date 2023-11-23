@@ -230,6 +230,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         // Aca iria algo de la transformacion...?
         client_data->mail_fd = open(client_data->mail_info_list[num - 1].filename, O_RDONLY);
         
+        logf(LOG_INFO, "Opening mail %s (user: %s - %d)", client_data->mail_info_list[num - 1].filename, client->user->name, client->client_index);
         selector_fd_set_nio(client_data->mail_fd);
         if (global_state.transformations_enabled) {
             int pop3_to_transf_fds[2];
@@ -259,8 +260,6 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
             selector_fd_set_nio(client_data->transf_to_pop3_fd);
         }
 
-        // char initial_message[50] = { 0 };
-        // socket_buffer_write(client_data->socket_data, initial_message, len);
         size_t bufferLen = 0;
         uint8_t * ptr = buffer_write_ptr(&(client->socket_data->write_buffer), &bufferLen);
         int len = sprintf((char *) ptr, OK_OCTETS, client_data->mail_info_list[num - 1].size);
@@ -281,7 +280,16 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
             client_data->transf_to_pop3_fd = -1;
         }
         
-        socket_buffer_write(client->socket_data, RETR_TERMINATION, sizeof RETR_TERMINATION - 1);
+        if (client_data->crlf_end && client_data->last_carriage_return) {
+            // Si termina en \r\n, como sacamos el \n, hay que agregar \n.\r\n
+            log(LOG_INFO, "writing lf");
+            socket_buffer_write(client->socket_data, LF_RETR_TERMINATION, sizeof LF_RETR_TERMINATION - 1);
+        } else {
+            // Sino, agregamos \r\n.\r\n
+            logf(LOG_INFO, "writing crlf %d %d", client_data->crlf_end, client_data->last_carriage_return);
+            socket_buffer_write(client->socket_data, (CRLF_RETR_TERMINATION), sizeof (CRLF_RETR_TERMINATION) - 1);
+        }
+        client_data->crlf_end = false;
         client->command_state.finished = true;
     }
 
@@ -656,11 +664,18 @@ static int processed_mail_to_mail_buffer(struct selector_key* key, Client* clien
             log(LOG_DEBUG, "Quedaron cosas por limpiar en el buffer");
             size_t mail_len;
             uint8_t * mrPtr = buffer_read_ptr(&(client_data->mail_buffer), &mail_len);
-            ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mrPtr, mail_len);
-            buffer_read_adv(&(client_data->mail_buffer), copied);
-            if (copied < (ssize_t) mail_len) {
-            // TODO: Como podemos manejar esto???? 
-                return COMMAND_WRITE;
+            
+            if (mail_len == 1 && mrPtr[0] == '\n') {
+                log(LOG_INFO, "Removing extra \n");
+                client_data->crlf_end = true; 
+                buffer_read_adv(&(client_data->mail_buffer), 1);
+            } else {
+                log(LOG_ERROR, "entered border case");
+                ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mrPtr, mail_len);
+                buffer_read_adv(&(client_data->mail_buffer), copied);
+                // if (copied < (ssize_t) mail_len) {
+                //     return COMMAND_WRITE;
+                // }
             }
         }
 
