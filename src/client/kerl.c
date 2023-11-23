@@ -163,6 +163,13 @@ int parse_path(const char* path, const char* body)
     }
 }
 
+#define AVAILABLE_COMMANDS "Available paths:\n\
+quit\n\
+stat/[c|t|b]\n\
+ttra/[0|1|]|\n\
+tran [-body \"commands\"|]\n\
+buff/[number|]\n"
+
 int parse_args(int argc, char* argv[], Arguments* args)
 {
     args->use_ipv6 = 0; // Default to IPv4
@@ -170,7 +177,10 @@ int parse_args(int argc, char* argv[], Arguments* args)
     args->body[0] = '\0';
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-v4") == 0) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            puts(AVAILABLE_COMMANDS);
+            return 1;
+        } else if (strcmp(argv[i], "-v4") == 0) {
             args->use_ipv6 = 0;
         } else if (strcmp(argv[i], "-v6") == 0) {
             args->use_ipv6 = 1;
@@ -291,7 +301,7 @@ int main(int argc, char* argv[])
     return 0;
 
 usage_error:
-    printf("Uso: %s [-v4|-v6] protocolo://user:pass@host:port/path\n", argv[0]);
+    printf("Uso: %s [-v4|-v6] dajt://user:pass@host:port/path\n", argv[0]);
     return 1;
 
 parsing_error:
