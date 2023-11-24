@@ -273,8 +273,10 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         client_data->last_carriage_return = false;
         if (client_data->pop3_to_transf_fd != -1) {
             close(client_data->pop3_to_transf_fd);
-            close(client_data->transf_to_pop3_fd);
             client_data->pop3_to_transf_fd = -1;
+        }
+        if (client_data->transf_to_pop3_fd != -1) {
+            close(client_data->transf_to_pop3_fd);
             client_data->transf_to_pop3_fd = -1;
         }
         
@@ -577,7 +579,24 @@ static void mail_buffer_to_client_buffer(Client* client){
     } while(newline != NULL && buffer_can_write(&(client->socket_data->write_buffer)) && buffer_can_read(&(client_data->mail_buffer)));
 }
 
+
+
+static void finish_reading_mail_file(ClientData * client_data, struct selector_key* key) {
+    log(LOG_INFO, "finish reading mail file");
+    client_data->current_mail = EMAIL_READ_DONE;
+    if(client_data->pop3_to_transf_fd != -1) {
+        selector_unregister_fd(key->s, client_data->pop3_to_transf_fd);
+        close(client_data->pop3_to_transf_fd);
+        client_data->pop3_to_transf_fd = -1;
+    }
+    if(client_data->mail_fd != -1) {
+        selector_unregister_fd(key->s, client_data->mail_fd);
+        close(client_data->mail_fd);
+    }
+}
+
 #define BUFFER_SIZE 65536 
+
 
 static int mail_file_to_pipe(struct selector_key* key, Client* client) {
     log(LOG_DEBUG, "reading mail to pipe");
@@ -590,7 +609,7 @@ static int mail_file_to_pipe(struct selector_key* key, Client* client) {
         if (written_count < read_count) {
             if (written_count == -1) {
                 if (errno != EAGAIN) {
-                    perror("pipe write");
+                    log(LOG_ERROR, "pipe write error");
                     return ERROR;
                 }
                 written_count = 0;
@@ -604,13 +623,14 @@ static int mail_file_to_pipe(struct selector_key* key, Client* client) {
             selector_set_interest(key->s, client_data->pop3_to_transf_fd, OP_NOOP);
         }
     } else if(read_count == 0){
-        client_data->current_mail = EMAIL_READ_DONE; 
-        selector_unregister_fd(key->s, client_data->mail_fd);
-        close(client_data->mail_fd);
-        selector_unregister_fd(key->s, client_data->pop3_to_transf_fd);
-        close(client_data->pop3_to_transf_fd);
+        // client_data->current_mail = EMAIL_READ_DONE; 
+        // selector_unregister_fd(key->s, client_data->mail_fd);
+        // close(client_data->mail_fd);
+        // selector_unregister_fd(key->s, client_data->pop3_to_transf_fd);
+        // close(client_data->pop3_to_transf_fd);
+        // selector_set_interest(key->s, client_data->transf_to_pop3_fd, OP_READ);
+        finish_reading_mail_file(client_data, key);
         selector_set_interest(key->s, client_data->transf_to_pop3_fd, OP_READ);
-        return COMMAND_READ;
     } else {
         return ERROR;
     }
@@ -650,6 +670,11 @@ static int processed_mail_to_mail_buffer(struct selector_key* key, Client* clien
         log(LOG_DEBUG, "Terminando...");
         selector_unregister_fd(key->s, pre_byte_stuffing_fd);
         client_data->current_mail = EMAIL_FINISHED;
+        if (client_data->pop3_to_transf_fd != -1) { //transf to pop finished before pop to transf
+            selector_unregister_fd(key->s, client_data->pop3_to_transf_fd);
+            close(client_data->pop3_to_transf_fd);
+            client_data->pop3_to_transf_fd = -1;
+        }
         selector_set_interest(key->s, client->socket_data->fd, OP_WRITE);
     } else {
         if (!buffer_can_read(&(client_data->mail_buffer))) {
@@ -715,9 +740,14 @@ unsigned command_write(struct selector_key* key)
 
     if (client_data->current_mail != NO_EMAIL && client_data->current_mail != EMAIL_FINISHED) {
         log(LOG_DEBUG, "mail section");
-        int pre_byte_stuffing_fd = client_data->pop3_to_transf_fd != -1 ? client_data->transf_to_pop3_fd : client_data->mail_fd;
+        int pre_byte_stuffing_fd = client_data->transf_to_pop3_fd != -1 ? client_data->transf_to_pop3_fd : client_data->mail_fd;
         if (client_data->pop3_to_transf_fd != -1) {
-            mail_file_to_pipe(key, client);
+            int result = mail_file_to_pipe(key, client);
+            if (result == ERROR) {
+                // client_data->current_mail = EMAIL_FINISHED;
+                finish_reading_mail_file(client_data, key);
+                // buffer_reset(&(client_data->mail_buffer));
+            }
         }
 
         if (buffer_can_write(&client_data->mail_buffer)) {
@@ -748,6 +778,7 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
     Client * client = ATTACHMENT(key);
     log(LOG_DEBUG, "I'm done");
     if (selector_unregister_fd(key->s, client->socket_data->fd) != SELECTOR_SUCCESS) {
+        log(LOG_ERROR, "Error unregistering fd");
         abort();
     }
     if (client->client_data->mail_fd != -1) {
@@ -755,8 +786,8 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
         close(client->client_data->mail_fd);
     }
     if  (client->client_data->pop3_to_transf_fd != -1) {
-        selector_unregister_fd(key->s, client->client_data->mail_fd);
-        close(client->client_data->mail_fd);
+        selector_unregister_fd(key->s, client->client_data->pop3_to_transf_fd);
+        close(client->client_data->pop3_to_transf_fd);
     }
     if  (client->client_data->transf_to_pop3_fd != -1) {
         selector_unregister_fd(key->s, client->client_data->transf_to_pop3_fd);

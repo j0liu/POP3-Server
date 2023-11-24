@@ -1,5 +1,6 @@
 #include "stm.h"
 #include <stdlib.h>
+#include "../logger/logger.h"
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -8,6 +9,7 @@ void stm_init(struct state_machine* stm)
     // verificamos que los estados son correlativos, y que están bien asignados.
     for (unsigned i = 0; i <= stm->max_state; i++) {
         if (i != stm->states[i].state) {
+            log(LOG_ERROR, "aborted");
             abort();
         }
     }
@@ -15,6 +17,7 @@ void stm_init(struct state_machine* stm)
     if (stm->initial < stm->max_state) {
         stm->current = NULL;
     } else {
+        log(LOG_ERROR, "aborted");
         abort();
     }
 }
@@ -33,6 +36,7 @@ inline static void handle_first(struct state_machine* stm, struct selector_key* 
 inline static void jump(struct state_machine* stm, unsigned next, struct selector_key* key)
 {
     if (next > stm->max_state) {
+        log(LOG_ERROR, "aborted");
         abort();
     }
     if (stm->current != stm->states + next) {
@@ -52,6 +56,7 @@ unsigned stm_handler_read(struct state_machine* stm, struct selector_key* key)
 {
     handle_first(stm, key);
     if (stm->current->on_read_ready == 0) {
+        log(LOG_ERROR, "aborted");
         abort();
     }
     const unsigned int ret = stm->current->on_read_ready(key);
@@ -64,6 +69,7 @@ unsigned stm_handler_write(struct state_machine* stm, struct selector_key* key)
 {
     handle_first(stm, key);
     if (stm->current->on_write_ready == 0) {
+        logf(LOG_ERROR, "aborted %d", key->fd);
         abort();
     }
     const unsigned int ret = stm->current->on_write_ready(key);
@@ -76,6 +82,7 @@ unsigned stm_handler_block(struct state_machine* stm, struct selector_key* key)
 {
     handle_first(stm, key);
     if (stm->current->on_block_ready == 0) {
+        log(LOG_ERROR, "aborted");
         abort();
     }
     const unsigned int ret = stm->current->on_block_ready(key);

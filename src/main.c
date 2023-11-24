@@ -41,6 +41,11 @@ static void sigterm_handler(const int signal)
     done = true;
 }
 
+static void sigpipe_handler_client(const int signal)
+{
+    logf(LOG_DEBUG, "Signal %d, broken pipe", signal);
+}
+
 int main(const int argc, char** argv)
 {
     selector_status ss = SELECTOR_SUCCESS;
@@ -63,6 +68,15 @@ int main(const int argc, char** argv)
 
     handler.sa_flags = 0;
 
+    struct sigaction handler_pipe;
+    handler_pipe.sa_handler = sigpipe_handler_client;
+    if (sigfillset(&handler_pipe.sa_mask) < 0) {
+        err_msg = "sigfillset() failed";
+        goto finally;
+    }
+
+    handler_pipe.sa_flags = 0;
+
     if (sigaction(SIGINT, &handler, 0) < 0) {
         err_msg = "sigaction() failed for SIGINT";
         goto finally;
@@ -70,6 +84,11 @@ int main(const int argc, char** argv)
 
     if (sigaction(SIGTERM, &handler, 0) < 0) {
         err_msg = "sigaction() failed for SIGTERM";
+        goto finally;
+    }
+
+    if (sigaction(SIGPIPE, &handler_pipe, 0) < 0) {
+        err_msg = "sigaction() failed for SIGPIPE";
         goto finally;
     }
     // ---- Signals End ---
