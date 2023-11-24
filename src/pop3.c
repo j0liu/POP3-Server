@@ -107,7 +107,7 @@ static int pass_handler(Client * client, char* commandParameters, uint8_t parame
         client_data->mail_info_list = get_mail_info_list(args.maildir_path, &client_data->mail_count, client->user->name);
         socket_buffer_write(client->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->mail_count_not_deleted = client_data->mail_count;
-        logf(LOG_INFO, "User %s (id: %d) logged in sucessfully", client->user->name, client->client_index);
+        logf(LOG_INFO, "User %s (id: %d) logged in successfully", client->user->name, client->client_index);
         client->command_state.finished = true; 
         return COMMAND_WRITE; 
     }

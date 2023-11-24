@@ -55,7 +55,7 @@ int main(const int argc, char** argv)
 
     log(LOG_DEBUG, "log debugging enabled");
 
-    const char* err_msg;
+    char* err_msg = NULL;
     int ret = 0;
 
     // ---- Signals ---

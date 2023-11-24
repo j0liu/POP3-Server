@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <unistd.h>
+#include "logger/logger.h"
 
 int is_regular_file(const char* path)
 {
@@ -66,10 +67,9 @@ MailInfo* get_mail_info_list(const char* directory_path, int* size, const char* 
     char cur_path[PATH_MAX], new_path[PATH_MAX];
     snprintf(cur_path, PATH_MAX, "%s/cur", user_mail_path);
     snprintf(new_path, PATH_MAX, "%s/new", user_mail_path);
-    int cur_count = count_mails(cur_path);
-    int new_count = count_mails(new_path);
+    int counts[2] = { count_mails(cur_path), count_mails(new_path) };
 
-    int total_count = cur_count + new_count;
+    int total_count = counts[0] + counts[1];
     *size = total_count;
 
     if (!total_count) {
@@ -86,10 +86,13 @@ MailInfo* get_mail_info_list(const char* directory_path, int* size, const char* 
     // Process 'cur' and 'new' directories
     const char* directories[] = { cur_path, new_path };
     for (int i = 0; i < 2; ++i) {
+        if (counts[i] == 0)
+            continue;
         dir = opendir(directories[i]);
         if (dir == NULL) {
-            free_mail_info_list(mail_info_list, index);
-            return NULL;
+            logf(LOG_ERROR, "Error opening directory %s", directories[i])
+            total_count -= counts[i];
+            continue; // Si hay un error, no se cargaran archivos de ese directorio
         }
         while ((entry = readdir(dir)) != NULL) {
             char filepath[MAX_PATH_LENGTH];
