@@ -103,9 +103,7 @@ static void cmd_action(parser_event* event, const uint8_t c)
 
 static void arg_action(parser_event* event, const uint8_t c)
 {
-    if (event->args_length < ARGS_LENGTH + 1) {
-        event->args[event->args_length++] = c;
-    }
+    event->args[event->args_length++] = c;
 }
 
 static void finish_action(parser_event* event, const uint8_t c)

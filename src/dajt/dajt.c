@@ -213,11 +213,6 @@ static int consume_dajt_buffer(parser* dajtParser, SocketData* socket_data)
 // TODO: Es igual a pop3, modularizar?
 static bool process_event(parser_event* event, Client* client)
 {
-    // if (event->command_length + event->args_length > MAX_COMMAND_LENGTH) {
-    //     socket_buffer_write(client_data->socket_data, ERR_COMMAND_TOO_LONG, sizeof ERR_COMMAND_TOO_LONG - 1);
-    //     return FINISH_CONNECTION;
-    // }
-
     for (int i = 0; i < (int)N(dajt_available_commands); i++) {
         if (event->command_length == 4 && strncasecmp(event->command, dajt_available_commands[i].name, event->command_length) == 0) {
             if ((client->state & dajt_available_commands[i].valid_states) == 0) {
@@ -292,7 +287,7 @@ static int process_read_buffer(Client* client) {
 
                 // TODO: Manejar errores
                 if (result == FINISH_CONNECTION) {
-                    log(LOG_ERROR, "Error!");
+                    // log(LOG_ERROR, "Error!");
                     return ERROR; 
                 }
             }

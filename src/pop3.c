@@ -81,11 +81,11 @@ static int quit_handler(Client * client, char* commandParameters, uint8_t parame
 
 static int user_handler(Client * client, char* commandParameters, uint8_t parameters_length)
 {
-    //ClientData* client_data = client->client_data;
     for (int i = 0; i < (int)args.quantity_users; i++) {
         if (strncmp(args.users[i].name, commandParameters, parameters_length) == 0 && args.users[i].name[parameters_length] == '\0') {
             socket_buffer_write(client->socket_data, OKCRLF, sizeof OKCRLF - 1);
             client->user = &args.users[i];
+            logf(LOG_INFO, "User %s (id: %d) trying to log in...", client->user->name, client->client_index);
             client->command_state.finished = true; 
             return COMMAND_WRITE; 
         }
@@ -105,13 +105,9 @@ static int pass_handler(Client * client, char* commandParameters, uint8_t parame
     if (strcmp(client->user->pass, commandParameters) == 0) {
         client->state = TRANSACTION;
         client_data->mail_info_list = get_mail_info_list(args.maildir_path, &client_data->mail_count, client->user->name);
-        // if (client_data->mail_info_list == NULL) {
-            // socket_buffer_write(client_data->socket_data, ERR_LOCKED_MAILDROP, sizeof ERR_LOCKED_MAILDROP - 1);
-            // free_client_data(client_data);
-            // return C; 
-        // }
         socket_buffer_write(client->socket_data, LOGGING_IN, sizeof LOGGING_IN - 1);
         client_data->mail_count_not_deleted = client_data->mail_count;
+        logf(LOG_INFO, "User %s (id: %d) logged in sucessfully", client->user->name, client->client_index);
         client->command_state.finished = true; 
         return COMMAND_WRITE; 
     }
@@ -120,6 +116,7 @@ static int pass_handler(Client * client, char* commandParameters, uint8_t parame
     return COMMAND_WRITE; 
 }
 
+#define FIRST_ARG_SIZE 255
 static int first_argument_to_int(Client* client, char* commandParameters)
 {
     char* endptr;
@@ -130,7 +127,7 @@ static int first_argument_to_int(Client* client, char* commandParameters)
             return num;
         }
     }
-    char buff[100] = { 0 }; // TODO: Improve
+    char buff[FIRST_ARG_SIZE] = { 0 };
     if (num <= 0 || endptr == commandParameters) {
         len = sprintf(buff, ERR_INVALID_NUMBER, commandParameters != NULL ? commandParameters : "");
     } else if (*endptr != '\0') {
@@ -142,6 +139,7 @@ static int first_argument_to_int(Client* client, char* commandParameters)
     return -1;
 }
 
+#define STAT_BUFF_SIZE 100 
 static int stat_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
     ClientData * client_data = client->client_data;
@@ -153,17 +151,18 @@ static int stat_handler(Client* client, char* commandParameters, uint8_t paramet
             size += client_data->mail_info_list[i].size;
         }
     }
-    char buff[100] = { 0 }; // TODO: Improve
+    char buff[STAT_BUFF_SIZE] = { 0 };
     int len = sprintf(buff, OK " %d %ld" CRLF, count, size);
     socket_buffer_write(client->socket_data, buff, len);
     client->command_state.finished = true; 
     return COMMAND_WRITE;
 }
 
+#define LIST_BUFF_SIZE 100
 static int list_handler(Client* client, char* commandParameters, uint8_t parameters_length)
 {
     ClientData * client_data = client->client_data;
-    char buff[100] = { 0 }; // TODO: Improve
+    char buff[LIST_BUFF_SIZE] = { 0 }; 
     if (client_data->list_current_mail == 0) {
         while (*commandParameters == ' ') {
             commandParameters++;
@@ -227,7 +226,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         }
         client_data->current_mail = num;
 
-        // Aca iria algo de la transformacion...?
+        logf(LOG_INFO, "Opening mail of user %s (id: %d): %s", client->user->name, client->client_index, client_data->mail_info_list[num - 1].filename);
         client_data->mail_fd = open(client_data->mail_info_list[num - 1].filename, O_RDONLY);
         
         selector_fd_set_nio(client_data->mail_fd);
@@ -259,8 +258,6 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
             selector_fd_set_nio(client_data->transf_to_pop3_fd);
         }
 
-        // char initial_message[50] = { 0 };
-        // socket_buffer_write(client_data->socket_data, initial_message, len);
         size_t bufferLen = 0;
         uint8_t * ptr = buffer_write_ptr(&(client->socket_data->write_buffer), &bufferLen);
         int len = sprintf((char *) ptr, OK_OCTETS, client_data->mail_info_list[num - 1].size);
@@ -268,7 +265,7 @@ static int retr_handler(Client* client, char* commandParameters, uint8_t paramet
         return REGISTER_PENDING;
     }  else if (num == EMAIL_FINISHED) {
         close(client_data->mail_fd);
-        log(LOG_INFO, "Closing mail");
+        logf(LOG_INFO, "Closing mail of user %s (id: %d)", client->user->name, client->client_index);
         // Send terminating sequence
         client_data->current_mail = NO_EMAIL;
         client_data->mail_fd = -1;
@@ -372,11 +369,6 @@ static int consume_pop3_buffer(parser* command_parser, SocketData* socket_data)
 
 static bool process_event(parser_event* event, Client* client)
 {
-    // if (event->command_length + event->args_length > MAX_COMMAND_LENGTH) {
-    //     socket_buffer_write(client_data->socket_data, ERR_COMMAND_TOO_LONG, sizeof ERR_COMMAND_TOO_LONG - 1);
-    //     return wTION;
-    // }
-
     for (int i = 0; i < (int)N(available_commands); i++) {
         if (event->command_length == 4 && strncasecmp(event->command, available_commands[i].name, event->command_length) == 0) {
             if ((client->state & available_commands[i].valid_states) == 0) {
@@ -417,7 +409,6 @@ void welcome_init(const unsigned prev_state, const unsigned state, struct select
 // TODO: Ver de sacar?
 void welcome_close(const unsigned state, struct selector_key* key)
 {
-    /* CommandState* d = &ATTACHMENT(key).command_st; */
     buffer *rb = &(ATTACHMENT(key)->socket_data->read_buffer), *wb = &(ATTACHMENT(key)->socket_data->write_buffer);
     buffer_reset(rb);
     buffer_reset(wb);
@@ -444,12 +435,6 @@ unsigned welcome_write(struct selector_key* key)
         return WELCOME;
     }
 
-    // Si no hay mas para escribir
-    // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-    //     return ERROR;
-    // }
-
-    // return WELCOME;
     return COMMAND_READ;
 }
 
@@ -477,11 +462,8 @@ static int process_read_buffer(Client* client) {
                 if (result == CONTINUE_CONNECTION) {
                     log(LOG_DEBUG, "Continue connection");
                     return COMMAND_WRITE; 
-                }
-
-                // TODO: Manejar errores
-                if (result == FINISH_CONNECTION) {
-                    log(LOG_ERROR, "Error!");
+                } else if (result == FINISH_CONNECTION) {
+                    // log(LOG_ERROR, "Error!");
                     return ERROR; 
                 }
             }
@@ -499,7 +481,7 @@ unsigned command_read(struct selector_key* key)
     buffer* rb = &client->socket_data->read_buffer;
     size_t len;
     uint8_t *rbPtr = buffer_write_ptr(rb, &len);
-    ssize_t read_count = recv(key->fd, rbPtr, len, 0); // TODO: Ver flags?
+    ssize_t read_count = recv(key->fd, rbPtr, len, 0);
 
     logf(LOG_DEBUG, "read %ld", read_count);
     if (!buffer_can_read(&client->socket_data->read_buffer) && read_count == 0) {
@@ -513,11 +495,8 @@ unsigned command_read(struct selector_key* key)
     }
 
     buffer_write_adv(rb, read_count);
-    // rbPtr = buffer_read_ptr(rb, &len);
     
-    int result = process_read_buffer(client);
-
-    return result;
+    return process_read_buffer(client);
 }
 
 void command_write_arrival(const unsigned prev_state, const unsigned state, struct selector_key* key) {
@@ -616,7 +595,7 @@ static int mail_file_to_pipe(struct selector_key* key, Client* client) {
                 }
                 written_count = 0;
             }
-            lseek(client_data->mail_fd, -(read_count - written_count), SEEK_CUR); // TODO: PREGUNTAR SI ESTO ESTA BIEN!
+            lseek(client_data->mail_fd, -(read_count - written_count), SEEK_CUR);
             logf(LOG_DEBUG, "rolling back %ld", -(read_count - written_count));
             selector_set_interest(key->s, client_data->mail_fd, OP_NOOP);
             selector_set_interest(key->s, client_data->pop3_to_transf_fd, OP_WRITE);
@@ -664,7 +643,6 @@ static int processed_mail_to_mail_buffer(struct selector_key* key, Client* clien
             ssize_t copied = buffer_ncopy(&(client->socket_data->write_buffer), mrPtr, mail_len);
             buffer_read_adv(&(client_data->mail_buffer), copied);
             if (copied < (ssize_t) mail_len) {
-            // TODO: Como podemos manejar esto???? 
                 return COMMAND_WRITE;
             }
         }
@@ -792,7 +770,6 @@ void done_arrival(const unsigned prev_state, const unsigned state, struct select
 unsigned error_write(struct selector_key* key) {
     log(LOG_DEBUG, "entered error");
     Client * client = ATTACHMENT(key);
-    //ClientData * client_data = client->client_data;
     size_t len = 0;
     uint8_t* ptr = buffer_read_ptr(&(client->socket_data->write_buffer), &len);
     ssize_t sent_count = send(key->fd, ptr, len, MSG_NOSIGNAL);
@@ -813,12 +790,6 @@ unsigned error_write(struct selector_key* key) {
 
     // Si se termino de escribir el error
     if (!buffer_can_read(&(client->socket_data->write_buffer))) {
-        // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-        //     return ERROR;
-        // }
-        // if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS) {
-        //     return DONE;
-        // }
         return COMMAND_READ;
     }
     return ERROR;
